@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "name": "Sam",
+  "timezone": "Europe/Brussels",
+  "weekStart": "monday",
+  "agentName": "Agent",
+  "projects": [
+    {
+      "key": "house",
+      "number": 3,
+      "color": "#7FE7D3"
+    },
+    {
+      "key": "side",
+      "number": 4,
+      "color": "#FFC94D"
+    },
+    {
+      "key": "health",
+      "number": 5
+    },
+    {
+      "key": "learning",
+      "number": 6
+    }
+  ],
+  "focus": [
+    "house",
+    "health"
+  ],
+  "labels": {
+    "idea": "idea",
+    "habitPrefix": "habit:",
+    "ignore": [
+      "weekly-review"
+    ]
+  },
+  "habits": [
+    {
+      "id": "move",
+      "title": "Move",
+      "start": "2026-09-22",
+      "project": "health"
+    },
+    {
+      "id": "read",
+      "title": "Read",
+      "start": "2026-09-22"
+    }
+  ],
+  "streak": {
+    "tokenEvery": 6,
+    "flameTiers": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "next": {
+    "count": 5
+  },
+  "season": {
+    "name": "Autumn",
+    "start": "2026-10-01",
+    "end": "2026-12-31",
+    "goals": [
+      {
+        "title": "Finish the kitchen and bathroom",
+        "project": "house"
+      },
+      {
+        "title": "Read twelve books"
+      },
+      {
+        "title": "Ship the first version of the side project",
+        "project": "side"
+      }
+    ]
+  },
+  "refresh": {
+    "dailyAt": "05:00"
+  }
+}

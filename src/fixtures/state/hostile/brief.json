@@ -1,0 +1,13 @@
+{
+  "generated": "2026-10-12T06:00:00+02:00",
+  "lines": [
+    {
+      "src": "CAL\"><script>alert(1)</script>&'",
+      "text": "Four events today\"><script>alert(1)</script>&'"
+    },
+    {
+      "src": "\"><script>alert(1)</script>&'",
+      "text": "\"><script>alert(1)</script>&'"
+    }
+  ]
+}

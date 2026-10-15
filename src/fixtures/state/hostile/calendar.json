@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-12",
+  "events": [
+    {
+      "title": "Standup\"><script>alert(1)</script>&'",
+      "start": "08:30",
+      "end": "08:45",
+      "kind": "meeting"
+    },
+    {
+      "title": "Dentist\"><script>alert(1)</script>&'",
+      "start": "14:00",
+      "end": "15:00",
+      "kind": "meeting"
+    }
+  ],
+  "allDay": [
+    {
+      "title": "Day off\"><script>alert(1)</script>&'"
+    }
+  ]
+}

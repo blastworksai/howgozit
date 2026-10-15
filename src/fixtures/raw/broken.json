@@ -1,0 +1,263 @@
+{
+  "fetchedAt": "2026-10-12T06:10:00Z",
+  "partial": {
+    "issues": false,
+    "items": false
+  },
+  "repo": "sam-life/life",
+  "repoPrivate": true,
+  "ownerType": "organization",
+  "issues": [
+    {
+      "number": 1,
+      "title": "Paint the wall",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": 1,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/1"
+    },
+    {
+      "number": 2,
+      "title": "Hang the shelf",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": 1,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/2"
+    },
+    {
+      "number": 3,
+      "title": "Mop the floor",
+      "state": "closed",
+      "state_reason": "completed",
+      "is_pr": false,
+      "labels": [],
+      "milestone": 1,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": "2026-10-09T09:00:00Z",
+      "html_url": "https://github.com/sam-life/life/issues/3"
+    },
+    {
+      "number": 4,
+      "title": "Sketch the logo",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": 2,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/4"
+    },
+    {
+      "number": 5,
+      "title": "Write the readme",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/5"
+    },
+    {
+      "number": 6,
+      "title": null,
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/6"
+    },
+    {
+      "number": 7,
+      "title": 12345,
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/7"
+    },
+    {
+      "number": 8,
+      "title": "Missing state",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/8"
+    },
+    {
+      "number": "9",
+      "title": "Number as text",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/9"
+    },
+    {
+      "number": 10,
+      "title": "Pick a name",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "idea"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/10"
+    },
+    {
+      "number": 11,
+      "title": "Buy a lamp",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/11"
+    }
+  ],
+  "milestones": [
+    {
+      "number": 1,
+      "title": "House · Walls",
+      "state": "open",
+      "due_on": "2026-10-20T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/1"
+    },
+    {
+      "number": 2,
+      "title": "Side project · Launch",
+      "state": "open",
+      "due_on": "2026-11-10T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/2"
+    },
+    {
+      "number": 3,
+      "title": null,
+      "state": "open",
+      "due_on": "2026-10-30T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/3"
+    },
+    {
+      "number": "4",
+      "title": "House · Roof",
+      "state": "open",
+      "due_on": "2026-10-31T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/4"
+    }
+  ],
+  "projects": [
+    {
+      "number": 3,
+      "title": "House",
+      "closed": false,
+      "url": "https://github.com/orgs/sam-life/projects/3",
+      "items": [
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 1,
+          "status": "In Progress",
+          "due": "2026-10-18"
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 2,
+          "status": "Todo",
+          "due": null
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 3,
+          "status": "Done",
+          "due": null
+        },
+        {
+          "repo": "sam-life/life",
+          "number": 2,
+          "status": "Todo",
+          "due": null
+        },
+        {
+          "type": 7,
+          "repo": "sam-life/life",
+          "number": 2,
+          "status": "Todo",
+          "due": null
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Side project",
+      "closed": false,
+      "url": "https://github.com/orgs/sam-life/projects/4",
+      "items": [
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 4,
+          "status": "Todo",
+          "due": "2026-11-02"
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 5,
+          "status": null,
+          "due": null
+        },
+        {
+          "type": null,
+          "repo": "sam-life/life",
+          "number": 5,
+          "status": "Todo",
+          "due": null
+        }
+      ]
+    }
+  ]
+}

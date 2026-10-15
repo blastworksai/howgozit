@@ -1,0 +1,80 @@
+# Example only. The image was built once by the authors; this compose file was not started. See references/deploy-proxy.md.
+# Run it from this folder: docker compose -f compose.proxy.example.yml up -d --build
+#
+# The build context is the src folder (one level up), so "build: .." below.
+# This file holds the board and Caddy. The login (Authentik) is assumed to exist already.
+# It is not in this file. Edit Caddyfile.example so it reaches your Authentik server
+# from the "edge" network (the placeholder name there is authentik-server).
+# If Authentik runs in another compose project, also attach caddy to that project's network.
+
+services:
+  board:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+
+    # No "ports:" section on purpose. Publishing a port would let people reach the board
+    # around the login, and the board trusts that the identity header came from the login.
+    expose:
+      - "8787"
+
+    environment:
+      BOARD_REPO: sam-life/life
+      BOARD_ALLOWED_HOSTS: board.example.com
+      BOARD_IDENTITY_HEADER: X-Authentik-Username
+      # BOARD_MODE, BOARD_HOST and BOARD_DATA_DIR are set in the image.
+      # Optional iCloud calendar (references/calendar-icloud.md). Set both or neither.
+      # They must come from a secret store or the env_file below, never be written into this file.
+      # BOARD_ICLOUD_USER:
+      # BOARD_ICLOUD_APP_PASSWORD:
+      # BOARD_PROXY_SECRET is optional and also a secret. Put it in the env_file below, and give the
+      # same file to the caddy service, so both sides read one value. references/deploy-proxy.md,
+      # section "On a machine other people or programs share", explains it.
+
+    # The token goes in BOARD_GITHUB_TOKEN, in a file that lives OUTSIDE this repository,
+    # readable by you only (chmod 600). Put one line in it: BOARD_GITHUB_TOKEN=<your token>.
+    # Never write the value in this file. The board reads the token from its environment
+    # only, so a Docker secret file (which is not an environment variable) does not work here.
+    env_file:
+      - /etc/board/board.env
+
+    volumes:
+      - board-data:/data
+
+    # A small init process in front, so the board stops at once on "docker compose stop".
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+
+    networks:
+      - edge
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    # Only Caddy is published to the outside.
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - board
+    networks:
+      - edge
+
+networks:
+  edge:
+
+volumes:
+  board-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,45 @@
+{
+  "updated": "2026-10-12T07:45:00+02:00",
+  "counts": {
+    "reply": 2,
+    "decide": 1,
+    "fyi": 7
+  },
+  "threads": [
+    {
+      "bucket": "reply",
+      "from": "Accountant",
+      "subject": "Q3 documents",
+      "why": "Asked a direct question",
+      "draft": true
+    },
+    {
+      "bucket": "reply",
+      "from": "Plumber",
+      "subject": "Visit next week?",
+      "why": "Needs a date from you",
+      "draft": false
+    },
+    {
+      "bucket": "decide",
+      "from": "Bank",
+      "subject": "New card design",
+      "why": "Choose one of two designs",
+      "draft": false
+    },
+    {
+      "bucket": "fyi",
+      "from": "Library",
+      "subject": "Your book is ready",
+      "why": "Pickup from Thursday",
+      "draft": false
+    },
+    {
+      "bucket": "fyi",
+      "from": "Gym",
+      "subject": "Holiday opening hours",
+      "why": "Closed on 1 November",
+      "draft": false
+    }
+  ]
+}

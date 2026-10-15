@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-12",
+  "events": [
+    {
+      "title": "Standup",
+      "start": "08:30",
+      "end": "08:45",
+      "kind": "meeting"
+    },
+    {
+      "title": "Dentist call",
+      "start": "10:00",
+      "end": "10:15",
+      "kind": "meeting"
+    },
+    {
+      "title": "Lunch with Alex",
+      "start": "12:30",
+      "end": "13:30",
+      "kind": "meeting"
+    },
+    {
+      "title": "Evening run",
+      "start": "18:30",
+      "end": "19:15",
+      "kind": "meeting"
+    }
+  ]
+}

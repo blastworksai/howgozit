@@ -1,0 +1,9 @@
+# Keeps local leftovers out of the Docker build context (the compose file builds from this folder).
+out/
+.board-data/
+.git
+*.log
+setup-undo*.json
+proposal*.json
+node_modules/
+.env*

@@ -1,0 +1,236 @@
+{
+  "fetchedAt": "2026-10-12T06:10:00Z",
+  "partial": {
+    "issues": false,
+    "items": false
+  },
+  "repo": "sam-life/life",
+  "repoPrivate": true,
+  "ownerType": "organization",
+  "issues": [
+    {
+      "number": 10,
+      "title": "Paint the hallway\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "home\"><script>alert(1)</script>&'"
+      ],
+      "milestone": 5,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/10"
+    },
+    {
+      "number": 11,
+      "title": "Fix the door\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "chore\"><script>alert(1)</script>&'"
+      ],
+      "milestone": 5,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/11"
+    },
+    {
+      "number": 12,
+      "title": "Buy paint\"><script>alert(1)</script>&'",
+      "state": "closed",
+      "state_reason": "completed",
+      "is_pr": false,
+      "labels": [],
+      "milestone": 5,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": "2026-10-10T09:00:00Z",
+      "html_url": "https://github.com/sam-life/life/issues/12"
+    },
+    {
+      "number": 13,
+      "title": "Plan the shed\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "shed\"><script>alert(1)</script>&'"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/13"
+    },
+    {
+      "number": 14,
+      "title": "Order the bench\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": 6,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/14"
+    },
+    {
+      "number": 20,
+      "title": "Renew the passport\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/20"
+    },
+    {
+      "number": 41,
+      "title": "Shelves for the hallway\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "idea"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-11T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/41"
+    },
+    {
+      "number": 42,
+      "title": "Herb garden\"><script>alert(1)</script>&'",
+      "state": "open",
+      "state_reason": null,
+      "is_pr": false,
+      "labels": [
+        "idea",
+        "plants\"><script>alert(1)</script>&'"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-09T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/issues/42"
+    },
+    {
+      "number": 50,
+      "title": "Move\"><script>alert(1)</script>&' · 2026-10-10",
+      "state": "closed",
+      "state_reason": "completed",
+      "is_pr": false,
+      "labels": [
+        "habit:move"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": "2026-10-10T07:00:00Z",
+      "html_url": "https://github.com/sam-life/life/issues/50"
+    },
+    {
+      "number": 51,
+      "title": "Move\"><script>alert(1)</script>&' · 2026-10-11",
+      "state": "closed",
+      "state_reason": "completed",
+      "is_pr": false,
+      "labels": [
+        "habit:move"
+      ],
+      "milestone": null,
+      "created_at": "2026-10-01T08:00:00Z",
+      "updated_at": "2026-10-05T08:00:00Z",
+      "closed_at": "2026-10-11T07:00:00Z",
+      "html_url": "https://github.com/sam-life/life/issues/51"
+    }
+  ],
+  "milestones": [
+    {
+      "number": 5,
+      "title": "House\"><script>alert(1)</script>&' · \"><script>alert(1)</script>&'",
+      "state": "open",
+      "due_on": "2026-10-20T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/5"
+    },
+    {
+      "number": 6,
+      "title": "Side\"><script>alert(1)</script>&' · \"><script>alert(1)</script>&'",
+      "state": "open",
+      "due_on": "2026-11-05T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/6"
+    },
+    {
+      "number": 7,
+      "title": "Orphan\"><script>alert(1)</script>&'",
+      "state": "open",
+      "due_on": "2026-10-30T07:00:00Z",
+      "closed_at": null,
+      "html_url": "https://github.com/sam-life/life/milestone/7"
+    }
+  ],
+  "projects": [
+    {
+      "number": 3,
+      "title": "House\"><script>alert(1)</script>&'",
+      "closed": false,
+      "url": "https://github.com/orgs/sam-life/projects/3",
+      "items": [
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 10,
+          "status": "In Progress",
+          "due": "2026-10-18"
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 11,
+          "status": "Todo\"><script>alert(1)</script>&'",
+          "due": null
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 12,
+          "status": "Done",
+          "due": null
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Side\"><script>alert(1)</script>&'",
+      "closed": false,
+      "url": "https://github.com/orgs/sam-life/projects/4",
+      "items": [
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 13,
+          "status": "Todo",
+          "due": null
+        },
+        {
+          "type": "Issue",
+          "repo": "sam-life/life",
+          "number": 14,
+          "status": "Todo",
+          "due": "2026-10-25"
+        }
+      ]
+    }
+  ]
+}

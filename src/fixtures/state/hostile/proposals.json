@@ -1,0 +1,19 @@
+{
+  "updated": "2026-10-12T06:00:00+02:00",
+  "focus": {
+    "add": [
+      "side"
+    ],
+    "remove": [],
+    "why": "Milestones fall due\"><script>alert(1)</script>&'"
+  },
+  "ideas": [
+    {
+      "number": 41,
+      "project": "house",
+      "milestone": 5,
+      "newProject": null,
+      "why": "Same room\"><script>alert(1)</script>&'"
+    }
+  ]
+}

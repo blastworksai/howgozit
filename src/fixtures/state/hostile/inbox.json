@@ -1,0 +1,24 @@
+{
+  "updated": "2026-10-12T07:45:00+02:00",
+  "counts": {
+    "reply": 1,
+    "decide": 1,
+    "fyi": 1
+  },
+  "threads": [
+    {
+      "bucket": "reply",
+      "from": "Accountant\"><script>alert(1)</script>&'",
+      "subject": "Q3 documents\"><script>alert(1)</script>&'",
+      "why": "Asked a question\"><script>alert(1)</script>&'",
+      "draft": true
+    },
+    {
+      "bucket": "decide",
+      "from": "Landlord\"><script>alert(1)</script>&'",
+      "subject": "Lease\"><script>alert(1)</script>&'",
+      "why": "\"><script>alert(1)</script>&'",
+      "draft": false
+    }
+  ]
+}

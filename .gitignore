@@ -1,0 +1,18 @@
+# Base secret-hygiene ignores (stamped by the Glitch workspace scaffold).
+# Reduces accidental staging of secret-NAMED files. It does NOT catch an in-file paste
+# or anything already tracked — that needs the secret scan + pre-commit hook (spec §8.5).
+.env*
+*.pem
+*.key
+*credentials*
+client_secret*.json
+*token*.json
+.mcp.json
+*.mcp.json
+.mcp.local.json
+
+# --- Glitch publish boundary (added by workspace-git) ---
+.planning/
+STATE.md
+CLAUDE.md
+AGENTS.md

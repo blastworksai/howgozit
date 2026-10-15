@@ -1,0 +1,12 @@
+[
+  {
+    "t": "06:00",
+    "agent": "brief-agent\"><script>alert(1)</script>&'",
+    "what": "Wrote the brief\"><script>alert(1)</script>&'"
+  },
+  {
+    "t": "05:30",
+    "agent": "\"><script>alert(1)</script>&'",
+    "what": "\"><script>alert(1)</script>&'"
+  }
+]

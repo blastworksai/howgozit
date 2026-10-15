@@ -1,0 +1,70 @@
+# Example only. Not run end to end. See references/deploy-proxy.md, section
+# "Without a container: a unit beside the proxy".
+#
+# A hardened systemd unit for running the board next to a login proxy on the same machine.
+# Edit the host name, the account, the paths and the identity header name before use.
+#
+# systemd reads the two environment files as root, before it drops to the service account,
+# so the account itself needs no read right on /etc/board.
+# The two EnvironmentFile= lines have no leading "-" on purpose: with the "-", a missing
+# secret file would be skipped, and the board would start without its token or its lock.
+# Without it, a missing file stops the board from starting.
+#
+# board.env holds BOARD_GITHUB_TOKEN= and BOARD_REPO=. proxy_secret.env holds BOARD_PROXY_SECRET=.
+# Both: owner root, mode 600. The proxy reads proxy_secret.env too.
+
+[Unit]
+Description=Life board (127.0.0.1:8787, behind a login proxy)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=board
+Group=board
+WorkingDirectory=/usr/local/lib/board
+Environment=HOME=/var/lib/board
+Environment=BOARD_MODE=proxy
+Environment=BOARD_HOST=127.0.0.1
+Environment=BOARD_PORT=8787
+Environment=BOARD_ALLOWED_HOSTS=board.example.com
+Environment=BOARD_IDENTITY_HEADER=X-Forwarded-User
+Environment=BOARD_DATA_DIR=/var/lib/board/board-data
+EnvironmentFile=/etc/board/board.env
+EnvironmentFile=/etc/board/proxy_secret.env
+ExecStartPre=/bin/sh -c 'test -n "$BOARD_PROXY_SECRET" && test -n "$BOARD_GITHUB_TOKEN" && test -n "$BOARD_REPO"'
+ExecStart=/usr/bin/node /usr/local/lib/board/board/server.mjs
+Restart=on-failure
+RestartSec=5
+StateDirectory=board
+StateDirectoryMode=0700
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# Hides places the board never needs. Do not add /etc/board here: it would hide the secret files.
+InaccessiblePaths=-/opt -/srv -/mnt -/root -/etc/caddy -/etc/sudoers.d
+ProtectProc=invisible
+ProcSubset=pid
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+IPAddressDeny=link-local multicast 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.168.0.0/16 fc00::/7
+
+[Install]
+WantedBy=multi-user.target

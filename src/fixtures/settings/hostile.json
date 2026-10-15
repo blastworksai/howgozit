@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "Sam\"><script>alert(1)</script>&'",
+  "timezone": "Europe/Brussels",
+  "weekStart": "monday",
+  "agentName": "Agent\"><script>alert(1)</script>&'",
+  "projects": [
+    {
+      "key": "house",
+      "number": 3,
+      "color": "#7FE7D3"
+    },
+    {
+      "key": "side",
+      "number": 4
+    }
+  ],
+  "focus": [
+    "house"
+  ],
+  "labels": {
+    "idea": "idea",
+    "habitPrefix": "habit:",
+    "ignore": [
+      "weekly-review"
+    ]
+  },
+  "habits": [
+    {
+      "id": "move",
+      "title": "Move\"><script>alert(1)</script>&'",
+      "start": "2026-10-05",
+      "project": "house"
+    }
+  ],
+  "streak": {
+    "tokenEvery": 6,
+    "flameTiers": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "next": {
+    "count": 5
+  },
+  "season": {
+    "name": "Autumn\"><script>alert(1)</script>&'",
+    "start": "2026-10-01",
+    "end": "2026-12-31",
+    "goals": [
+      {
+        "title": "Finish the hall\"><script>alert(1)</script>&'",
+        "project": "house"
+      },
+      {
+        "title": "Open the shed\"><script>alert(1)</script>&'",
+        "project": "side"
+      }
+    ]
+  },
+  "refresh": {
+    "dailyAt": "05:00"
+  }
+}

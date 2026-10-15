@@ -1,0 +1,22 @@
+[
+  {
+    "t": "07:45",
+    "agent": "inbox-agent",
+    "what": "Sorted 10 new emails into three buckets"
+  },
+  {
+    "t": "07:30",
+    "agent": "calendar-agent",
+    "what": "Read the calendar for today"
+  },
+  {
+    "t": "06:00",
+    "agent": "brief-agent",
+    "what": "Wrote this morning's brief"
+  },
+  {
+    "t": "05:30",
+    "agent": "brief-agent",
+    "what": "Checked the board for overdue work"
+  }
+]

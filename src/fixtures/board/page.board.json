@@ -1,0 +1,1212 @@
+{
+  "meta": {
+    "generatedAt": "2026-10-12T06:10:05Z",
+    "today": "2026-10-12",
+    "timezone": "Europe/Brussels",
+    "name": "Sam",
+    "greeting": "Good morning",
+    "weekNumber": 42,
+    "agentName": "Agent",
+    "repoUrl": "https://github.com/sam-life/life",
+    "stale": null,
+    "readOnly": false,
+    "sources": [
+      {
+        "id": "github",
+        "state": "ok",
+        "at": "2026-10-12T06:10:00Z"
+      },
+      {
+        "id": "brief",
+        "state": "ok",
+        "at": "2026-10-12T06:00:00Z"
+      },
+      {
+        "id": "calendar",
+        "state": "stale",
+        "at": "2026-10-11T18:30:00Z"
+      },
+      {
+        "id": "inbox",
+        "state": "ok",
+        "at": "2026-10-12T05:45:00Z"
+      },
+      {
+        "id": "log",
+        "state": "ok",
+        "at": "2026-10-12T06:00:00Z"
+      }
+    ],
+    "warnings": [
+      {
+        "code": "milestone-unmatched",
+        "count": 1
+      },
+      {
+        "code": "items-hidden",
+        "count": 2
+      }
+    ]
+  },
+  "focus": {
+    "projects": [
+      {
+        "key": "house",
+        "title": "House",
+        "color": "#7FE7D3"
+      },
+      {
+        "key": "health",
+        "title": "Health",
+        "color": "#C9B6FF"
+      }
+    ],
+    "proposal": {
+      "add": [
+        "side"
+      ],
+      "remove": [],
+      "why": "Two milestones fall due this week",
+      "stale": false
+    }
+  },
+  "next": [
+    {
+      "number": 12,
+      "title": "Paint the hallway",
+      "url": "https://github.com/sam-life/life/issues/12",
+      "project": {
+        "key": "house",
+        "title": "House",
+        "color": "#7FE7D3"
+      },
+      "milestone": {
+        "shortTitle": "Hallway"
+      },
+      "due": "2026-10-09",
+      "urgency": "overdue",
+      "overdueDays": 3
+    },
+    {
+      "number": 31,
+      "title": "Book the check-up",
+      "url": "https://github.com/sam-life/life/issues/31",
+      "project": {
+        "key": "health",
+        "title": "Health",
+        "color": "#C9B6FF"
+      },
+      "milestone": {
+        "shortTitle": "Check-up"
+      },
+      "due": "2026-10-14",
+      "urgency": "dated",
+      "overdueDays": 0
+    },
+    {
+      "number": 14,
+      "title": "Buy shelf brackets",
+      "url": "https://github.com/sam-life/life/issues/14",
+      "project": {
+        "key": "house",
+        "title": "House",
+        "color": "#7FE7D3"
+      },
+      "milestone": {
+        "shortTitle": "Hallway"
+      },
+      "due": "2026-10-18",
+      "urgency": "dated",
+      "overdueDays": 0
+    },
+    {
+      "number": 33,
+      "title": "Plan the weekly run",
+      "url": "https://github.com/sam-life/life/issues/33",
+      "project": {
+        "key": "health",
+        "title": "Health",
+        "color": "#C9B6FF"
+      },
+      "milestone": null,
+      "due": null,
+      "urgency": "undated",
+      "overdueDays": 0
+    },
+    {
+      "number": 17,
+      "title": "Sand the floor",
+      "url": "https://github.com/sam-life/life/issues/17",
+      "project": {
+        "key": "house",
+        "title": "House",
+        "color": "#7FE7D3"
+      },
+      "milestone": {
+        "shortTitle": "Hallway"
+      },
+      "due": null,
+      "urgency": "undated",
+      "overdueDays": 0
+    }
+  ],
+  "timeline": {
+    "start": "2026-09-01",
+    "end": "2026-11-30",
+    "today": "2026-10-12",
+    "lanes": [
+      {
+        "project": {
+          "key": "house",
+          "title": "House",
+          "color": "#7FE7D3",
+          "focus": true
+        },
+        "milestones": [
+          {
+            "number": 4,
+            "shortTitle": "Demolition",
+            "url": "https://github.com/sam-life/life/milestone/4",
+            "due": "2026-09-15",
+            "state": "done",
+            "done": 4,
+            "total": 4,
+            "pct": 100
+          },
+          {
+            "number": 5,
+            "shortTitle": "Hallway",
+            "url": "https://github.com/sam-life/life/milestone/5",
+            "due": "2026-10-20",
+            "state": "open",
+            "done": 1,
+            "total": 3,
+            "pct": 33
+          }
+        ],
+        "undated": [
+          {
+            "number": 8,
+            "shortTitle": "Someday",
+            "url": "https://github.com/sam-life/life/milestone/8",
+            "due": null,
+            "state": "open",
+            "done": 0,
+            "total": 2,
+            "pct": 0
+          }
+        ],
+        "beforeWindow": 0,
+        "beyondWindow": 0
+      },
+      {
+        "project": {
+          "key": "health",
+          "title": "Health",
+          "color": "#C9B6FF",
+          "focus": true
+        },
+        "milestones": [
+          {
+            "number": 11,
+            "shortTitle": "Check-up",
+            "url": "https://github.com/sam-life/life/milestone/11",
+            "due": "2026-10-08",
+            "state": "overdue",
+            "done": 1,
+            "total": 2,
+            "pct": 50
+          },
+          {
+            "number": 12,
+            "shortTitle": "Routine",
+            "url": "https://github.com/sam-life/life/milestone/12",
+            "due": "2026-11-10",
+            "state": "open",
+            "done": 2,
+            "total": 4,
+            "pct": 50
+          }
+        ],
+        "undated": [],
+        "beforeWindow": 0,
+        "beyondWindow": 0
+      },
+      {
+        "project": {
+          "key": "side",
+          "title": "Side",
+          "color": "#FFC94D",
+          "focus": false
+        },
+        "milestones": [
+          {
+            "number": 15,
+            "shortTitle": "Prototype",
+            "url": "https://github.com/sam-life/life/milestone/15",
+            "due": "2026-11-02",
+            "state": "open",
+            "done": 1,
+            "total": 3,
+            "pct": 33
+          }
+        ],
+        "undated": [],
+        "beforeWindow": 0,
+        "beyondWindow": 0
+      }
+    ],
+    "other": [
+      {
+        "number": 9,
+        "shortTitle": "Garden · Beds",
+        "url": "https://github.com/sam-life/life/milestone/9",
+        "due": "2026-11-02",
+        "state": "open",
+        "done": 0,
+        "total": 1,
+        "pct": 0
+      }
+    ]
+  },
+  "projects": [
+    {
+      "key": "house",
+      "number": 3,
+      "title": "House",
+      "url": "https://github.com/orgs/sam-life/projects/3",
+      "color": "#7FE7D3",
+      "focus": true,
+      "done": 3,
+      "total": 9,
+      "pct": 33,
+      "empty": false,
+      "doing": 2,
+      "overdueMilestones": 0,
+      "nextMilestone": {
+        "shortTitle": "Hallway",
+        "due": "2026-10-20"
+      },
+      "habits": [
+        {
+          "id": "move",
+          "title": "Move",
+          "streak": 9
+        }
+      ]
+    },
+    {
+      "key": "health",
+      "number": 5,
+      "title": "Health",
+      "url": "https://github.com/orgs/sam-life/projects/5",
+      "color": "#C9B6FF",
+      "focus": true,
+      "done": 4,
+      "total": 6,
+      "pct": 66,
+      "empty": false,
+      "doing": 1,
+      "overdueMilestones": 1,
+      "nextMilestone": {
+        "shortTitle": "Check-up",
+        "due": "2026-10-08"
+      },
+      "habits": []
+    },
+    {
+      "key": "side",
+      "number": 4,
+      "title": "Side",
+      "url": "https://github.com/orgs/sam-life/projects/4",
+      "color": "#FFC94D",
+      "focus": false,
+      "done": 2,
+      "total": 5,
+      "pct": 40,
+      "empty": false,
+      "doing": 1,
+      "overdueMilestones": 0,
+      "nextMilestone": {
+        "shortTitle": "Prototype",
+        "due": "2026-11-02"
+      },
+      "habits": []
+    },
+    {
+      "key": "learning",
+      "number": 6,
+      "title": "Learning",
+      "url": "https://github.com/orgs/sam-life/projects/6",
+      "color": "#FF9E80",
+      "focus": false,
+      "done": 0,
+      "total": 0,
+      "pct": 0,
+      "empty": true,
+      "doing": 0,
+      "overdueMilestones": 0,
+      "nextMilestone": null,
+      "habits": []
+    }
+  ],
+  "habits": [
+    {
+      "id": "move",
+      "title": "Move",
+      "project": {
+        "key": "house",
+        "color": "#7FE7D3"
+      },
+      "streak": 9,
+      "best": 12,
+      "tokens": 1,
+      "toNextToken": 3,
+      "flamesLit": 3,
+      "flames": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ],
+      "toNextFlame": 5,
+      "recent": [
+        {
+          "date": "2026-09-29",
+          "status": "done"
+        },
+        {
+          "date": "2026-09-30",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-02",
+          "status": "missed"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-04",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-05",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-06",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-07",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-08",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-09",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-10",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-11",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-12",
+          "status": "pending"
+        }
+      ],
+      "doneToday": false
+    },
+    {
+      "id": "read",
+      "title": "Read",
+      "project": null,
+      "streak": 4,
+      "best": 6,
+      "tokens": 0,
+      "toNextToken": 2,
+      "flamesLit": 2,
+      "flames": [
+        true,
+        true,
+        false,
+        false,
+        false
+      ],
+      "toNextFlame": 3,
+      "recent": [
+        {
+          "date": "2026-09-29",
+          "status": "before"
+        },
+        {
+          "date": "2026-09-30",
+          "status": "before"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-02",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-04",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-05",
+          "status": "missed"
+        },
+        {
+          "date": "2026-10-06",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-07",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-08",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-09",
+          "status": "missed"
+        },
+        {
+          "date": "2026-10-10",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-11",
+          "status": "done"
+        },
+        {
+          "date": "2026-10-12",
+          "status": "done"
+        }
+      ],
+      "doneToday": true
+    }
+  ],
+  "ideas": {
+    "count": 4,
+    "shown": 4,
+    "items": [
+      {
+        "number": 44,
+        "title": "Plan a weekend away",
+        "url": "https://github.com/sam-life/life/issues/44",
+        "createdAt": "2026-10-12",
+        "suggestion": null
+      },
+      {
+        "number": 43,
+        "title": "Learn to bake bread",
+        "url": "https://github.com/sam-life/life/issues/43",
+        "createdAt": "2026-10-11",
+        "suggestion": null
+      },
+      {
+        "number": 42,
+        "title": "Start a vegetable patch",
+        "url": "https://github.com/sam-life/life/issues/42",
+        "createdAt": "2026-10-10",
+        "suggestion": {
+          "project": null,
+          "projectTitle": null,
+          "milestone": null,
+          "milestoneTitle": null,
+          "newProject": "Garden",
+          "why": "Nothing in the current projects covers growing food",
+          "stale": false,
+          "acceptable": false
+        }
+      },
+      {
+        "number": 41,
+        "title": "Shelves for the hallway",
+        "url": "https://github.com/sam-life/life/issues/41",
+        "createdAt": "2026-10-09",
+        "suggestion": {
+          "project": "house",
+          "projectTitle": "House",
+          "milestone": 5,
+          "milestoneTitle": "Hallway",
+          "newProject": null,
+          "why": "Same room as the hallway work",
+          "stale": false,
+          "acceptable": true
+        }
+      }
+    ]
+  },
+  "sortTargets": [
+    {
+      "key": "house",
+      "title": "House",
+      "milestones": [
+        {
+          "number": 5,
+          "shortTitle": "Hallway"
+        },
+        {
+          "number": 8,
+          "shortTitle": "Someday"
+        }
+      ]
+    },
+    {
+      "key": "health",
+      "title": "Health",
+      "milestones": [
+        {
+          "number": 11,
+          "shortTitle": "Check-up"
+        },
+        {
+          "number": 12,
+          "shortTitle": "Routine"
+        }
+      ]
+    },
+    {
+      "key": "side",
+      "title": "Side",
+      "milestones": [
+        {
+          "number": 15,
+          "shortTitle": "Prototype"
+        }
+      ]
+    },
+    {
+      "key": "learning",
+      "title": "Learning",
+      "milestones": []
+    }
+  ],
+  "heatmap": {
+    "weeks": [
+      [
+        {
+          "date": "2026-07-27",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-07-28",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-07-29",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-07-30",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-07-31",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-08-01",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-08-02",
+          "count": 6,
+          "level": 4
+        }
+      ],
+      [
+        {
+          "date": "2026-08-03",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-08-04",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-08-05",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-08-06",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-08-07",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-08-08",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-08-09",
+          "count": 1,
+          "level": 1
+        }
+      ],
+      [
+        {
+          "date": "2026-08-10",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-08-11",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-08-12",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-08-13",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-08-14",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-08-15",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-08-16",
+          "count": 4,
+          "level": 3
+        }
+      ],
+      [
+        {
+          "date": "2026-08-17",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-08-18",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-08-19",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-08-20",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-08-21",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-08-22",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-08-23",
+          "count": 7,
+          "level": 4
+        }
+      ],
+      [
+        {
+          "date": "2026-08-24",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-08-25",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-08-26",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-08-27",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-08-28",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-08-29",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-08-30",
+          "count": 2,
+          "level": 2
+        }
+      ],
+      [
+        {
+          "date": "2026-08-31",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-09-01",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-09-02",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-09-03",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-09-04",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-09-05",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-09-06",
+          "count": 5,
+          "level": 3
+        }
+      ],
+      [
+        {
+          "date": "2026-09-07",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-09-08",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-09-09",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-09-10",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-09-11",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-09-12",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-09-13",
+          "count": 0,
+          "level": 0
+        }
+      ],
+      [
+        {
+          "date": "2026-09-14",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-09-15",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-09-16",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-09-17",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-09-18",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-09-19",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-09-20",
+          "count": 3,
+          "level": 2
+        }
+      ],
+      [
+        {
+          "date": "2026-09-21",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-09-22",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-09-23",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-09-24",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-09-25",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-09-26",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-09-27",
+          "count": 6,
+          "level": 4
+        }
+      ],
+      [
+        {
+          "date": "2026-09-28",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-09-29",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-09-30",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-10-01",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-10-02",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-10-03",
+          "count": 4,
+          "level": 3
+        },
+        {
+          "date": "2026-10-04",
+          "count": 1,
+          "level": 1
+        }
+      ],
+      [
+        {
+          "date": "2026-10-05",
+          "count": 6,
+          "level": 4
+        },
+        {
+          "date": "2026-10-06",
+          "count": 3,
+          "level": 2
+        },
+        {
+          "date": "2026-10-07",
+          "count": 0,
+          "level": 0
+        },
+        {
+          "date": "2026-10-08",
+          "count": 5,
+          "level": 3
+        },
+        {
+          "date": "2026-10-09",
+          "count": 2,
+          "level": 2
+        },
+        {
+          "date": "2026-10-10",
+          "count": 7,
+          "level": 4
+        },
+        {
+          "date": "2026-10-11",
+          "count": 4,
+          "level": 3
+        }
+      ],
+      [
+        {
+          "date": "2026-10-12",
+          "count": 1,
+          "level": 1
+        },
+        {
+          "date": "2026-10-13",
+          "count": null,
+          "level": null
+        },
+        {
+          "date": "2026-10-14",
+          "count": null,
+          "level": null
+        },
+        {
+          "date": "2026-10-15",
+          "count": null,
+          "level": null
+        },
+        {
+          "date": "2026-10-16",
+          "count": null,
+          "level": null
+        },
+        {
+          "date": "2026-10-17",
+          "count": null,
+          "level": null
+        },
+        {
+          "date": "2026-10-18",
+          "count": null,
+          "level": null
+        }
+      ]
+    ]
+  },
+  "season": {
+    "name": "Autumn",
+    "start": "2026-10-12",
+    "end": "2026-12-31",
+    "daysLeft": 80,
+    "phase": "running",
+    "goals": [
+      {
+        "title": "Finish the hallway",
+        "pct": 33
+      },
+      {
+        "title": "Read twelve books",
+        "pct": null
+      },
+      {
+        "title": "Ship the prototype",
+        "pct": 40
+      }
+    ]
+  },
+  "standalone": {
+    "count": 2,
+    "items": [
+      {
+        "number": 30,
+        "title": "Renew passport",
+        "url": "https://github.com/sam-life/life/issues/30",
+        "due": null
+      },
+      {
+        "number": 35,
+        "title": "Call the dentist",
+        "url": "https://github.com/sam-life/life/issues/35",
+        "due": "2026-10-30"
+      }
+    ]
+  },
+  "panels": {
+    "brief": {
+      "stale": false,
+      "generated": "06:00",
+      "lines": [
+        {
+          "src": "CAL",
+          "text": "4 events today."
+        },
+        {
+          "src": "MAIL",
+          "text": "4 messages need a reply."
+        },
+        {
+          "src": "GH",
+          "text": "The hallway milestone is due on 20 October."
+        }
+      ]
+    },
+    "calendar": {
+      "stale": true,
+      "date": "2026-10-12",
+      "now": "08:10",
+      "events": [
+        {
+          "title": "Standup",
+          "start": "08:30",
+          "end": "08:45",
+          "kind": "meeting"
+        },
+        {
+          "title": "Deep work",
+          "start": "09:00",
+          "end": "11:00",
+          "kind": "focus"
+        },
+        {
+          "title": "Lunch with Alex",
+          "start": "12:30",
+          "end": "13:30",
+          "kind": "personal"
+        },
+        {
+          "title": "Move",
+          "start": "18:00",
+          "end": "18:30",
+          "kind": "habit"
+        }
+      ]
+    },
+    "inbox": {
+      "stale": false,
+      "counts": {
+        "reply": 2,
+        "decide": 1,
+        "fyi": 2
+      },
+      "threads": [
+        {
+          "bucket": "reply",
+          "from": "Accountant",
+          "subject": "Q3 documents",
+          "why": "Asked a direct question",
+          "draft": true
+        },
+        {
+          "bucket": "reply",
+          "from": "Alex",
+          "subject": "Saturday plans",
+          "why": "Waiting on your answer"
+        },
+        {
+          "bucket": "decide",
+          "from": "Landlord",
+          "subject": "Roof repair quote",
+          "why": "Needs a yes or no"
+        },
+        {
+          "bucket": "fyi",
+          "from": "Gym",
+          "subject": "New opening hours",
+          "why": "Schedule change"
+        },
+        {
+          "bucket": "fyi",
+          "from": "Library",
+          "subject": "Book ready to collect",
+          "why": "Pickup notice"
+        }
+      ]
+    },
+    "log": {
+      "stale": false,
+      "entries": [
+        {
+          "t": "06:00",
+          "agent": "brief-agent",
+          "what": "Wrote this morning's brief"
+        },
+        {
+          "t": "05:45",
+          "agent": "inbox-agent",
+          "what": "Sorted 17 messages into three buckets"
+        },
+        {
+          "t": "05:30",
+          "agent": "brief-agent",
+          "what": "Drafted a reply to the accountant"
+        },
+        {
+          "t": "05:00",
+          "agent": "calendar-agent",
+          "what": "Read the calendar for the day"
+        }
+      ]
+    }
+  }
+}

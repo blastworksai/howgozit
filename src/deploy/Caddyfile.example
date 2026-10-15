@@ -1,0 +1,55 @@
+# Example only. Not run end to end. See references/deploy-proxy.md.
+# It follows the shape of a Caddy + Authentik forward-auth set-up that is known to work.
+#
+# This copy is for compose.proxy.example.yml, where Caddy and the board share a Docker network.
+# - The board is reached at board:8787.
+# - Authentik is reached at the address in the AUTHENTIK line below. Replace it with the
+#   name or address your Authentik server answers to from this network. Authentik is not
+#   part of the compose file. It is assumed to exist already.
+# If Caddy runs on the host and the board listens on a loopback port instead,
+# use 127.0.0.1:8787 for the board, and add the same header_up line inside that reverse_proxy block
+# if you switch the secret on.
+
+(authentik) {
+	# route keeps the given order. The outpost's own paths must be matched before the auth check.
+	route {
+		reverse_proxy /outpost.goauthentik.io/* authentik-server:9000 {
+			header_up X-Forwarded-Proto https
+		}
+		forward_auth authentik-server:9000 {
+			uri /outpost.goauthentik.io/auth/caddy
+			# The capitalisation of these names matters. Copy exactly what Authentik sends.
+			copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Name X-Authentik-Uid
+			trusted_proxies private_ranges
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+
+# Form 1: Caddy holds the certificate itself and answers on 443.
+board.example.com {
+	route {
+		import authentik
+		handle {
+			reverse_proxy board:8787 {
+				# Switch this on when other programs share the machine (BOARD_PROXY_SECRET, see the guide).
+				# header_up X-Board-Proxy-Secret {env.BOARD_PROXY_SECRET}
+			}
+		}
+	}
+}
+
+# Form 2: TLS ends in front of Caddy, so Caddy listens on plain port 80
+# and tells the upstream the request was HTTPS. Use this form instead of form 1, not with it.
+# board.example.com:80 {
+# 	route {
+# 		import authentik
+# 		handle {
+# 			reverse_proxy board:8787 {
+# 				header_up X-Forwarded-Proto https
+# 				# Switch this on when other programs share the machine (BOARD_PROXY_SECRET, see the guide).
+# 				# header_up X-Board-Proxy-Secret {env.BOARD_PROXY_SECRET}
+# 			}
+# 		}
+# 	}
+# }

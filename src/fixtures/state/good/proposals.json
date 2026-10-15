@@ -1,0 +1,26 @@
+{
+  "updated": "2026-10-12T06:00:00+02:00",
+  "focus": {
+    "add": [
+      "side"
+    ],
+    "remove": [],
+    "why": "The landing page milestone falls due today"
+  },
+  "ideas": [
+    {
+      "number": 33,
+      "project": "house",
+      "milestone": 5,
+      "newProject": null,
+      "why": "Same room as the bathroom work"
+    },
+    {
+      "number": 34,
+      "project": null,
+      "milestone": null,
+      "newProject": "Hobbies",
+      "why": "Nothing on the board covers hobbies yet"
+    }
+  ]
+}
