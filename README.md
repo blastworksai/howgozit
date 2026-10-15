@@ -8,7 +8,11 @@
 One page that shows your projects, your next steps, your habits and your ideas, read straight from where your work already lives.</p>
 
 <p align="center">
-  <a href="https://blastworks.ai"><b>🚀 Made by Blastworks.ai: visit blastworks.ai</b></a>
+  <img src="assets/howgozit-curve.png" alt="howgozit curve, noun (how·go·zit curve): a running graph of the progress of an airplane flight involving the distance covered, fuel consumed, and time elapsed and enabling the pilot to determine the equitime point" width="600">
+</p>
+
+<p align="center">
+  <a href="https://blastworks.ai"><b>λ A Blastworks.ai Product</b></a>
   &nbsp;·&nbsp;
   <a href="https://glitchcatclub.com">Works best with Glitch</a>
   &nbsp;·&nbsp;
