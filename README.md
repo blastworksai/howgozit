@@ -8,7 +8,8 @@
 One page that shows your projects, your next steps, your habits and your ideas, read straight from where your work already lives.</p>
 
 <p align="center">
-  <img src="assets/howgozit-curve.png" alt="howgozit curve, noun (how·go·zit curve): a running graph of the progress of an airplane flight involving the distance covered, fuel consumed, and time elapsed and enabling the pilot to determine the equitime point" width="600">
+  <img src="assets/howgozit-curve.png" alt="howgozit curve, noun (how·go·zit curve): a running graph of the progress of an airplane flight involving the distance covered, fuel consumed, and time elapsed and enabling the pilot to determine the equitime point" width="600"><br>
+  <sub>Definition: <a href="https://www.merriam-webster.com/dictionary/howgozit%20curve">Merriam-Webster</a></sub>
 </p>
 
 <p align="center">
