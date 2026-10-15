@@ -19,7 +19,7 @@ Each one changes a row in your Notion tables.
 
 ## Notion's terms
 
-Using Notion's API with your token means you accept [Notion's Developer Terms](https://www.notion.com/notion/developer-terms-ba4131408d0844e08330da2cbb225c20) (last updated 2 April 2026 when this guide was written), together with Notion's Content & Use Policy and Brand Guidelines.
+Using Notion's API with your token means you accept [Notion's Developer Terms](https://notion.notion.site/Developer-Terms-ba4131408d0844e08330da2cbb225c20) (last updated 2 April 2026 when this guide was written), together with Notion's Content & Use Policy and Brand Guidelines.
 Read them yourself; this is a summary of what touches the board, not legal advice.
 
 - Howgozit is an independent project. It is not made, endorsed, certified or supported by Notion, and Notion offers no support for it.
