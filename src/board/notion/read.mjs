@@ -1,4 +1,6 @@
-// read: turns the five Notion data sources into the board snapshot (cp9-interface §1-§3; contract R144-R146, R68, R65).
+// read: turns the four Notion data sources (projects, tasks, goals, habitLog) into the board snapshot
+// (notion-native interface §3; contract R144-R146, R68, R65, R151 idea/card split, R152 labels from Tags,
+// R155 the Projects rows are the project list when the settings hold none).
 // Takes an http object (request); makes no request of its own outside it and reads no clock (`now` is passed in).
 // The store is the adapter's own memory of every row; toRaw derives the snapshot from it and is pure.
 
@@ -9,13 +11,13 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v) => typeof v === 'string';
 const isPosInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
 
-export const KINDS = ['projects', 'cards', 'goals', 'ideas', 'habitLog'];
+export const KINDS = ['projects', 'tasks', 'goals', 'habitLog'];
 const PAGE_CAP = 100; // query pages per data source (R68)
 const RELATION_PAGE_CAP = 20; // pages of one relation (R146)
 const DELTA_MARGIN_MS = 5 * 60 * 1000; // R145
 const HABIT_WINDOW_DAYS = 120; // R68
 const ID_RE = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-const SETTINGS_SENTENCE = 'The settings need a notion block with the five data source ids; see notion-setup.md.';
+const SETTINGS_SENTENCE = 'The settings need a notion block with the four data source ids (projects, tasks, goals, habitLog); see notion-setup.md.';
 
 // The setup palette (cp7-interface §2); `default` has no entry (R132's muted).
 const PALETTE = {
@@ -25,15 +27,16 @@ const PALETTE = {
 
 // Which relation property feeds which row key.
 const RELATIONS = {
-  cards: [['projectIds', 'Project'], ['goalIds', 'Goal'], ['blockedByIds', 'Blocked by']],
+  tasks: [['projectIds', 'Project'], ['goalIds', 'Goal'], ['blockedByIds', 'Blocked by']],
   goals: [['projectIds', 'Project']],
 };
 
 export function createStore() {
   return {
-    rows: { projects: new Map(), cards: new Map(), goals: new Map(), ideas: new Map(), habitLog: new Map() },
+    rows: { projects: new Map(), tasks: new Map(), goals: new Map(), habitLog: new Map() },
     schema: {
-      cards: { groupOf: new Map(), completeFirst: null, modeColors: new Map() },
+      tasks: { groupOf: new Map(), completeFirst: null, tagColors: new Map() },
+      projects: { groupOf: new Map() },
       habitLog: { hasScore: false },
     },
     lastReadMs: null,
@@ -86,6 +89,12 @@ function selectOf(page, name) {
   return p && isObj(p.select) && isStr(p.select.name) && p.select.name !== '' ? p.select.name : null;
 }
 
+function multiSelectOf(page, name) {
+  const p = prop(page, name, 'multi_select');
+  if (!p || !Array.isArray(p.multi_select)) return [];
+  return p.multi_select.filter((o) => isObj(o) && isStr(o.name) && o.name !== '').map((o) => o.name);
+}
+
 function relationOf(page, name) {
   const p = prop(page, name, 'relation');
   if (!p || !Array.isArray(p.relation)) return { ids: [], more: null };
@@ -115,18 +124,18 @@ export function normalize(kind, page, schema) {
     row[key] = r.ids;
     if (r.more !== null) more.push({ key, prop: r.more });
   }
-  if (kind === 'cards') {
+  if (kind === 'tasks' || kind === 'projects') {
     const st = prop(page, 'Status', 'status');
     const s = st && isObj(st.status) ? st.status : null;
     row.statusId = s && isStr(s.id) ? s.id : null;
     row.statusName = s && isStr(s.name) ? s.name : null;
-    row.mode = selectOf(page, 'Mode');
+  }
+  if (kind === 'tasks') {
+    row.tags = multiSelectOf(page, 'Tags');
     row.due = dateOf(page, 'Due');
   } else if (kind === 'goals') {
     row.due = dateOf(page, 'Due');
     row.done = checkboxOf(page, 'Done');
-  } else if (kind === 'ideas') {
-    row.filed = checkboxOf(page, 'Filed');
   } else if (kind === 'habitLog') {
     const habit = selectOf(page, 'Habit');
     const date = dateOf(page, 'Date');
@@ -161,9 +170,11 @@ function zoneOf(settings) {
 
 // ---- schema ----
 
-function readSchemas(cardsDs, habitDs) {
-  const cards = { groupOf: new Map(), completeFirst: null, modeColors: new Map() };
-  const props = isObj(cardsDs) && isObj(cardsDs.properties) ? cardsDs.properties : {};
+// The Status option -> group map of one data source (done / doing / todo) and the first Complete option's name.
+function statusGroups(ds) {
+  const groupOf = new Map();
+  let completeFirst = null;
+  const props = isObj(ds) && isObj(ds.properties) ? ds.properties : {};
   let status = isObj(props.Status) && props.Status.type === 'status' ? props.Status : null;
   if (!status) status = Object.values(props).find((p) => isObj(p) && p.type === 'status') ?? null;
   const sdef = status && isObj(status.status) ? status.status : {};
@@ -176,19 +187,25 @@ function readSchemas(cardsDs, habitDs) {
     if (kind === null) continue;
     for (const oid of g.option_ids) {
       if (!isStr(oid)) continue;
-      cards.groupOf.set(oid, kind);
-      if (kind === 'done' && cards.completeFirst === null && isStr(nameOf.get(oid))) cards.completeFirst = nameOf.get(oid);
+      groupOf.set(oid, kind);
+      if (kind === 'done' && completeFirst === null && isStr(nameOf.get(oid))) completeFirst = nameOf.get(oid);
     }
   }
-  const mode = isObj(props.Mode) && props.Mode.type === 'select' ? props.Mode : null;
-  const mopts = mode && isObj(mode.select) && Array.isArray(mode.select.options) ? mode.select.options : [];
-  for (const o of mopts) {
+  return { groupOf, completeFirst };
+}
+
+function readSchemas(tasksDs, habitDs, projectsDs) {
+  const tasks = { ...statusGroups(tasksDs), tagColors: new Map() };
+  const props = isObj(tasksDs) && isObj(tasksDs.properties) ? tasksDs.properties : {};
+  const tags = isObj(props.Tags) && props.Tags.type === 'multi_select' ? props.Tags : null;
+  const topts = tags && isObj(tags.multi_select) && Array.isArray(tags.multi_select.options) ? tags.multi_select.options : [];
+  for (const o of topts) {
     if (!isObj(o) || !isStr(o.name) || o.name === '') continue;
     const hex = PALETTE[o.color];
-    if (hex !== undefined) cards.modeColors.set(o.name.trim().toLowerCase(), hex);
+    if (hex !== undefined) tasks.tagColors.set(o.name.trim().toLowerCase(), hex);
   }
   const hprops = isObj(habitDs) && isObj(habitDs.properties) ? habitDs.properties : {};
-  return { cards, habitLog: { hasScore: isObj(hprops.Score) && hprops.Score.type === 'number' } };
+  return { tasks, projects: { groupOf: statusGroups(projectsDs).groupOf }, habitLog: { hasScore: isObj(hprops.Score) && hprops.Score.type === 'number' } };
 }
 
 // ---- reading ----
@@ -239,9 +256,10 @@ export async function readNotion(http, store, { settings, full, now } = {}) {
 
   let schemas = null;
   if (doFull) {
-    const cardsDs = await http.request('GET', `/v1/data_sources/${ids.cards}`);
+    const tasksDs = await http.request('GET', `/v1/data_sources/${ids.tasks}`);
     const habitDs = await http.request('GET', `/v1/data_sources/${ids.habitLog}`);
-    schemas = readSchemas(cardsDs, habitDs);
+    const projectsDs = await http.request('GET', `/v1/data_sources/${ids.projects}`);
+    schemas = readSchemas(tasksDs, habitDs, projectsDs);
   }
 
   const since = doFull ? null : new Date(store.lastReadMs - DELTA_MARGIN_MS).toISOString();
@@ -304,14 +322,26 @@ export async function readNotion(http, store, { settings, full, now } = {}) {
   if (skipped.count > 0) warnings.push({ code: 'row-skipped', count: skipped.count });
   const capped = (partialIssues ? 1 : 0) + (partialItems ? 1 : 0);
   if (capped > 0) warnings.push({ code: 'too-much-data', count: capped });
-  const raw = toRaw(store, settings, now);
+  // R155: with no `projects` list in the settings, the open Projects rows are the list, handed on as if the settings held it.
+  const effective = isObj(settings) && settings.projects === undefined ? { ...settings, projects: listedFromRows(store) } : settings;
+  const raw = toRaw(store, effective, now);
   // R143: a role number a listed project already uses is ignored, and counted as a setting the board cannot use.
-  const cfg = isObj(settings) ? settings : {};
+  const cfg = isObj(effective) ? effective : {};
   let invalid = 0;
   if (isObj(cfg.habitsProject) && isPosInt(cfg.habitsProject.number) && !raw.projects.some((p) => p.role === 'habits')) invalid += 1;
   if (isObj(cfg.ideas) && isPosInt(cfg.ideas.number) && !raw.projects.some((p) => p.role === 'ideas')) invalid += 1;
   if (invalid > 0) warnings.push({ code: 'setting-invalid', count: invalid });
-  return { raw, warnings };
+  return { raw, warnings, settings: effective };
+}
+
+// R155 (pure): every Projects row whose Status is not in the Complete group (no status counts as open), in ID order,
+// as the settings `projects` entries `notion-<ID>`.
+export function listedFromRows(store) {
+  const groupOf = store.schema.projects.groupOf;
+  return [...store.rows.projects.values()]
+    .filter((r) => !(r.statusId !== null && r.statusId !== undefined && groupOf.get(r.statusId) === 'done'))
+    .sort((a, b) => a.number - b.number || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((r) => ({ key: `notion-${r.number}`, owner: 'notion', number: r.number }));
 }
 
 // ---- toRaw (pure) ----
@@ -330,12 +360,21 @@ export function toRaw(store, settings, now) {
     if (isObj(h) && isStr(h.id) && isStr(h.title) && h.title !== '') habitTitles.set(h.id.toLowerCase(), h.title);
   }
   const notionIds = isObj(cfg.notion) ? cfg.notion : {};
-  const { groupOf } = store.schema.cards;
+  const { groupOf } = store.schema.tasks;
   const groupOfCard = (c) => (c.statusId !== null && groupOf.has(c.statusId) ? groupOf.get(c.statusId) : 'todo');
   const isClosed = (c) => groupOfCard(c) === 'done';
   const statusName = { todo: 'Todo', doing: 'In Progress', done: 'Done' };
 
-  const cards = sorted(store.rows.cards);
+  const IDEA_TAG = 'idea';
+  const modeNames = (Array.isArray(cfg.modes) ? cfg.modes : [])
+    .map((m) => (isStr(m) ? m : isObj(m) && isStr(m.name) ? m.name : null))
+    .filter((m) => m !== null && m.trim() !== '');
+  const tagsOf = (t) => t.tags.map((x) => x.trim().toLowerCase());
+  const isIdea = (t) => tagsOf(t).includes(IDEA_TAG) && t.projectIds.length === 0 && !isClosed(t);
+  const droppedIdea = (t) => tagsOf(t).includes(IDEA_TAG) && t.projectIds.length === 0 && isClosed(t);
+  const allTasks = sorted(store.rows.tasks);
+  const cards = allTasks.filter((t) => !isIdea(t) && !droppedIdea(t));
+  const ideaRows = allTasks.filter(isIdea);
   const goals = store.rows.goals;
   const projects = store.rows.projects;
 
@@ -359,19 +398,18 @@ export function toRaw(store, settings, now) {
   for (const c of cards) {
     const closed = isClosed(c);
     const goal = c.goalIds.length ? goals.get(c.goalIds[0]) : undefined;
-    const row = base(c, closed ? 'closed' : 'open', closed ? c.edited : null, c.mode !== null ? [c.mode] : [], goal ? goal.number : null);
+    const row = base(c, closed ? 'closed' : 'open', closed ? c.edited : null, modeNames.filter((m) => tagsOf(c).includes(m.trim().toLowerCase())), goal ? goal.number : null);
     if (!closed) {
       const waiting = [];
       for (const bid of c.blockedByIds) {
-        const t = store.rows.cards.get(bid);
+        const t = store.rows.tasks.get(bid);
         if (t && !isClosed(t)) waiting.push({ ref: `notion:${t.id}`, title: t.title, url: urlOf(t.id) });
       }
       if (waiting.length) row.waitingOn = waiting;
     }
     issues.push(row);
   }
-  const openIdeas = sorted(store.rows.ideas).filter((i) => !i.filed);
-  for (const i of openIdeas) issues.push(base(i, 'open', null, [ideaLabel], null));
+  for (const i of ideaRows) issues.push(base(i, 'open', null, [ideaLabel], null));
   const habitRows = sorted(store.rows.habitLog);
   for (const h of habitRows) {
     const at = h.done ? (instantOf(tz, h.date, '12:00') ?? `${h.date}T12:00:00Z`) : null;
@@ -432,9 +470,9 @@ export function toRaw(store, settings, now) {
     used.add(ip);
     out.push({
       number: ip, title: 'Ideas', closed: false,
-      url: isStr(notionIds.ideas) ? urlOf(notionIds.ideas) : 'https://www.notion.so/',
+      url: isStr(notionIds.tasks) ? urlOf(notionIds.tasks) : 'https://www.notion.so/',
       owner: 'notion', ownerType: 'user', role: 'ideas',
-      items: openIdeas.map((i) => ({ type: 'Issue', ref: `notion:${i.id}`, repo: 'notion', number: i.number, status: null, due: null })),
+      items: ideaRows.map((i) => ({ type: 'Issue', ref: `notion:${i.id}`, repo: 'notion', number: i.number, status: null, due: null })),
     });
   }
 
@@ -449,6 +487,11 @@ export function toRaw(store, settings, now) {
     milestones,
     projects: out,
   };
-  if (store.schema.cards.modeColors.size > 0) raw.labelColors = Object.fromEntries(store.schema.cards.modeColors);
+  const labelColors = {};
+  for (const m of modeNames) {
+    const k = m.trim().toLowerCase();
+    if (store.schema.tasks.tagColors.has(k)) labelColors[k] = store.schema.tasks.tagColors.get(k);
+  }
+  if (Object.keys(labelColors).length > 0) raw.labelColors = labelColors;
   return raw;
 }

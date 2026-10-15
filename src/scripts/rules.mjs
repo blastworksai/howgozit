@@ -14,10 +14,10 @@ export const DEFAULT_CONTRACT = path.join(SRC_ROOT, 'references', 'contract.md')
 export const NAME_OK = /^(R\d+|S\d+|U) /;
 const TEST_CALL = /\btest(?:\.\w+)?\(\s*(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g;
 
-// Rules that have tests: R1 to R150 and S1 to S8 (S9 and the V lines have none).
+// Rules that have tests: R1 to R156 and S1 to S8 (S9 and the V lines have none).
 export function contractRules(text) {
   const ids = new Set();
-  for (const m of text.matchAll(/^\*\*R(\d+)\. /gm)) if (Number(m[1]) <= 150) ids.add('R' + m[1]);
+  for (const m of text.matchAll(/^\*\*R(\d+)\. /gm)) if (Number(m[1]) <= 156) ids.add('R' + m[1]);
   for (const m of text.matchAll(/^\*\*S(\d+)\.\*\*/gm)) if (Number(m[1]) <= 8) ids.add('S' + m[1]);
   return ids;
 }

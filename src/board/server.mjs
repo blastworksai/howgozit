@@ -149,6 +149,7 @@ export function createApp({ handlers, guard, log = () => {}, staticFiles } = {})
   }
 
   return async (req, res) => {
+    const startedAt = performance.now();
     const method = req.method || 'GET';
     const full = req.url || '/';
     const q = full.indexOf('?');
@@ -164,7 +165,7 @@ export function createApp({ handlers, guard, log = () => {}, staticFiles } = {})
       }
     }
     try {
-      log(`${method} ${shown} ${res.statusCode}`);
+      log(`${method} ${shown} ${res.statusCode} ${Math.max(0, Math.round(performance.now() - startedAt))}ms`);
     } catch {
       // a failing log never breaks a request
     }

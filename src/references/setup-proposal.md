@@ -90,3 +90,10 @@ All commands are run with `node scripts/setup.mjs`, and the token comes from `BO
 - An existing settings file is added to, never rewritten. Nothing in it is removed or changed.
 - Every object `apply` creates is written to `setup-undo.json` as it goes, so a run that stops halfway can still be undone with `node scripts/undo.mjs`.
 - If GitHub refuses to create a Project or its field, that project is skipped and the run ends with a plain sentence saying what to do by hand in GitHub, then to run `apply` again.
+
+## On Notion
+
+A Notion board uses the same proposal with `owner` and `repo` left out; the check refuses them.
+`name` and `timezone` are required.
+A habit may also carry `score: { "min": 1, "max": 10 }` (whole numbers, 1 <= min < max <= 10), as on GitHub; it gives the habit that score and makes setup add the scored-habits setting.
+The commands are `node scripts/notion-setup.mjs plan <proposal.json>` and `apply <proposal.json>`; see `references/notion-setup.md`.

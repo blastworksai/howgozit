@@ -12,6 +12,7 @@ import { GitHubError } from '../board/github/http.mjs';
 import { logIdea, setHabit, sortIdea } from '../board/actions.mjs';
 import { verbsFromGh } from '../board/github/adapter.mjs';
 import { createFakeNotion } from '../fixtures/fake-notion.mjs';
+import { seedHowgozit } from '../fixtures/notion-howgozit.mjs';
 import { createNotionHttp } from '../board/notion/http.mjs';
 import { createNotionAdapter } from '../board/notion/adapter.mjs';
 import { createGuard } from '../board/guard.mjs';
@@ -278,58 +279,28 @@ const TOKEN = 'ntn_SENTINEL_token_4711';
 const FORM_KEY = 'f'.repeat(16) + 'ORM-KEY-SENTINEL-' + 'z'.repeat(8);
 const HOST = 'localhost:8787';
 const CONFIG = '/srv/board-config';
-const PROJECTS = '1000000000000000000000000000000a';
-const CARDS = '1000000000000000000000000000000b';
-const GOALS = '1000000000000000000000000000000c';
-const IDEAS = '1000000000000000000000000000000d';
-const HABITS = '1000000000000000000000000000000e';
-const dashed = (h) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+const dashed = (h) => (/^[0-9a-f]{32}$/.test(h) ? `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` : h);
 const pid = (n) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const P_HOUSE = pid(1);
 const G_HALL = pid(2);
 const C_OLD = pid(10);
 const I_SHELVES = pid(20);
 
-const SCHEMA = {
-  [PROJECTS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' } } },
-  [CARDS]: {
-    properties: {
-      Name: { type: 'title' }, ID: { type: 'unique_id' },
-      Status: {
-        type: 'status',
-        options: [{ name: 'Not started' }, { name: 'In progress' }, { name: 'Done' }],
-        groups: [{ name: 'To-do', option_ids: ['Not started'] }, { name: 'In progress', option_ids: ['In progress'] }, { name: 'Complete', option_ids: ['Done'] }],
-      },
-      Project: { type: 'relation', data_source_id: PROJECTS },
-      Goal: { type: 'relation', data_source_id: GOALS },
-      'Blocked by': { type: 'relation', data_source_id: CARDS },
-      Mode: { type: 'select', options: [{ name: 'DO', color: 'green' }] },
-      Due: { type: 'date' },
-    },
-  },
-  [GOALS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Project: { type: 'relation', data_source_id: PROJECTS }, Due: { type: 'date' }, Done: { type: 'checkbox' } } },
-  [IDEAS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Filed: { type: 'checkbox' } } },
-  [HABITS]: {
-    properties: {
-      Name: { type: 'title' }, ID: { type: 'unique_id' }, Habit: { type: 'select', options: [{ name: 'move' }] },
-      Date: { type: 'date' }, Done: { type: 'checkbox' }, Score: { type: 'number' },
-    },
-  },
-};
-
-test('U B6 filing an idea on Notion creates a new Card even when an open Card in the same Project has the same title, and leaves that Card\'s Goal alone', async () => {
-  const fake = createFakeNotion({ token: TOKEN, dataSources: SCHEMA });
-  fake.addPage(PROJECTS, { Name: 'House', ID: 3 }, { id: P_HOUSE });
-  fake.addPage(GOALS, { Name: 'Hallway', ID: 1, Project: [P_HOUSE], Due: '2026-10-20' }, { id: G_HALL });
-  // An older, unrelated Card that happens to carry the idea's title: open, in the project, with no goal.
-  fake.addPage(CARDS, { Name: 'Shelves for the hall', ID: 7, Status: 'Not started', Project: [P_HOUSE] }, { id: C_OLD });
-  fake.addPage(IDEAS, { Name: 'Shelves for the hall', ID: 1, Filed: false }, { id: I_SHELVES });
+test('U B6 filing an idea on Notion patches the idea\'s own page even when an open task in the same Project has the same title, and leaves that task alone', async () => {
+  const fake = createFakeNotion({ token: TOKEN });
+  const ids = await seedHowgozit(fake);
+  const { projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS } = ids;
+  fake.addPage(PROJECTS, { 'Project name': 'House', ID: 3 }, { id: P_HOUSE });
+  fake.addPage(GOALS, { 'Goal name': 'Hallway', ID: 1, Project: [P_HOUSE], Due: '2026-10-20' }, { id: G_HALL });
+  // An older, unrelated task that happens to carry the idea's title: open, in the project, with no goal.
+  fake.addPage(TASKS, { 'Task name': 'Shelves for the hall', ID: 7, Status: 'Not started', Project: [P_HOUSE] }, { id: C_OLD });
+  fake.addPage(TASKS, { 'Task name': 'Shelves for the hall', ID: 1, Status: 'Not started', Tags: ['Idea'] }, { id: I_SHELVES });
 
   const cfg = settings({
     projects: [{ key: 'house', number: 3 }],
     habits: [{ id: 'move', title: 'Move', start: '2026-10-01' }],
     habitsProject: { owner: 'notion', number: 1 },
-    notion: { projects: PROJECTS, cards: CARDS, goals: GOALS, ideas: IDEAS, habitLog: HABITS },
+    notion: { projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS },
   });
   const http = createNotionHttp({ token: TOKEN, fetch: fake.fetch, sleep: async () => {} });
   const files = { 'board.config.json': JSON.stringify(cfg) };
@@ -350,14 +321,14 @@ test('U B6 filing an idea on Notion creates a new Card even when an open Card in
 
   const res = await h.action('sort', req, { token: guard.formToken('sort', '1'), number: '1', target: 'house/1' });
   assert.equal(res.status, 303, 'the sort went through');
-  const ds = fake.state.dataSources[dashed(CARDS)];
-  const live = ds.pages.filter((p) => !p.trashed);
-  assert.equal(live.length, 2, 'a new Card was made beside the old one');
+  const live = fake.state.dataSources[dashed(TASKS)].pages.filter((p) => !p.trashed);
+  assert.equal(live.length, 2, 'no task was made');
   const old = live.find((p) => p.id === C_OLD);
-  assert.ok(!old.values.Goal || old.values.Goal.length === 0, 'the old Card\'s Goal is unchanged');
-  const made = live.find((p) => p.id !== C_OLD);
-  assert.deepEqual(made.values.Goal, [G_HALL], 'the new Card carries the goal chosen in the sort');
-  assert.equal(fake.state.dataSources[dashed(IDEAS)].pages.find((p) => p.id === I_SHELVES).values.Filed, true, 'the idea is filed');
+  assert.ok(!old.values.Goal || old.values.Goal.length === 0, 'the old task\'s Goal is unchanged');
+  const idea = live.find((p) => p.id === I_SHELVES);
+  assert.deepEqual(idea.values.Project, [P_HOUSE], 'the idea itself moved into the project');
+  assert.deepEqual(idea.values.Goal, [G_HALL], 'and carries the goal chosen in the sort');
+  assert.deepEqual(idea.values.Tags || [], [], 'and lost its Idea tag');
 });
 
 // ====================================================================== B8 (R59) an original that answers "moved"

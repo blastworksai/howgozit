@@ -76,13 +76,13 @@ export function readEnv(processEnv) {
   }
   if (backend !== 'github' && backend !== 'notion') return fail('BOARD_BACKEND must be github or notion.');
 
-  // R143: a Notion board needs its own token and its settings folder; GitHub tokens and BOARD_REPO are ignored there.
+  // R143, R151: a Notion board (four data sources) needs its own token and its settings folder; GitHub tokens and BOARD_REPO are ignored there.
   let token = null;
   let repo = 'notion';
   let notionToken = null;
   if (backend === 'notion') {
     notionToken = pick(src, 'BOARD_NOTION_TOKEN');
-    if (!notionToken) return fail('Set BOARD_NOTION_TOKEN to a Notion token that can read your five data sources.');
+    if (!notionToken) return fail('Set BOARD_NOTION_TOKEN to a Notion token that can read your four data sources.');
     if (!pick(src, 'BOARD_CONFIG_DIR')) return fail('Set BOARD_CONFIG_DIR to the folder that holds board.config.json, because a Notion board keeps its settings on this machine.');
   } else {
     token = pick(src, 'BOARD_GITHUB_TOKEN');

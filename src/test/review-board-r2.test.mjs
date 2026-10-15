@@ -12,6 +12,7 @@ import { logIdea, sortIdea } from '../board/actions.mjs';
 import { verbsFromGh, createMadeMemory } from '../board/github/adapter.mjs';
 import { createLoader } from '../board/load.mjs';
 import { createFakeNotion } from '../fixtures/fake-notion.mjs';
+import { seedHowgozit } from '../fixtures/notion-howgozit.mjs';
 import { createNotionHttp } from '../board/notion/http.mjs';
 import { createNotionAdapter } from '../board/notion/adapter.mjs';
 import { createGuard } from '../board/guard.mjs';
@@ -280,56 +281,26 @@ const TOKEN = 'ntn_SENTINEL_token_4711';
 const FORM_KEY = 'f'.repeat(16) + 'ORM-KEY-SENTINEL-' + 'z'.repeat(8);
 const HOST = 'localhost:8787';
 const CONFIG = '/srv/board-config';
-const PROJECTS = '1000000000000000000000000000000a';
-const CARDS = '1000000000000000000000000000000b';
-const GOALS = '1000000000000000000000000000000c';
-const IDEAS = '1000000000000000000000000000000d';
-const HABITS = '1000000000000000000000000000000e';
-const dashed = (h) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+const dashed = (h) => (/^[0-9a-f]{32}$/.test(h) ? `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` : h);
 const pid = (n) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const P_A = pid(1);
 const P_B = pid(3);
 const G_HALL = pid(2);
 const I_SHELVES = pid(20);
 
-const SCHEMA = {
-  [PROJECTS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' } } },
-  [CARDS]: {
-    properties: {
-      Name: { type: 'title' }, ID: { type: 'unique_id' },
-      Status: {
-        type: 'status',
-        options: [{ name: 'Not started' }, { name: 'In progress' }, { name: 'Done' }],
-        groups: [{ name: 'To-do', option_ids: ['Not started'] }, { name: 'In progress', option_ids: ['In progress'] }, { name: 'Complete', option_ids: ['Done'] }],
-      },
-      Project: { type: 'relation', data_source_id: PROJECTS },
-      Goal: { type: 'relation', data_source_id: GOALS },
-      'Blocked by': { type: 'relation', data_source_id: CARDS },
-      Mode: { type: 'select', options: [{ name: 'DO', color: 'green' }] },
-      Due: { type: 'date' },
-    },
-  },
-  [GOALS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Project: { type: 'relation', data_source_id: PROJECTS }, Due: { type: 'date' }, Done: { type: 'checkbox' } } },
-  [IDEAS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Filed: { type: 'checkbox' } } },
-  [HABITS]: {
-    properties: {
-      Name: { type: 'title' }, ID: { type: 'unique_id' }, Habit: { type: 'select', options: [{ name: 'move' }] },
-      Date: { type: 'date' }, Done: { type: 'checkbox' }, Score: { type: 'number' },
-    },
-  },
-};
-
-function notionSetup() {
-  const fake = createFakeNotion({ token: TOKEN, dataSources: SCHEMA });
-  fake.addPage(PROJECTS, { Name: 'Alpha', ID: 3 }, { id: P_A });
-  fake.addPage(PROJECTS, { Name: 'Bravo', ID: 4 }, { id: P_B });
-  fake.addPage(GOALS, { Name: 'Hallway', ID: 1, Project: [P_A], Due: '2026-10-20' }, { id: G_HALL });
-  fake.addPage(IDEAS, { Name: 'Shelves for the hall', ID: 1, Filed: false }, { id: I_SHELVES });
+async function notionSetup() {
+  const fake = createFakeNotion({ token: TOKEN });
+  const ids = await seedHowgozit(fake);
+  const { projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS } = ids;
+  fake.addPage(PROJECTS, { 'Project name': 'Alpha', ID: 3 }, { id: P_A });
+  fake.addPage(PROJECTS, { 'Project name': 'Bravo', ID: 4 }, { id: P_B });
+  fake.addPage(GOALS, { 'Goal name': 'Hallway', ID: 1, Project: [P_A], Due: '2026-10-20' }, { id: G_HALL });
+  fake.addPage(TASKS, { 'Task name': 'Shelves for the hall', ID: 1, Status: 'Not started', Tags: ['Idea'] }, { id: I_SHELVES });
   const cfg = settings({
     projects: [{ key: 'alpha', number: 3 }, { key: 'bravo', number: 4 }],
     habits: [{ id: 'move', title: 'Move', start: '2026-10-01' }],
     habitsProject: { owner: 'notion', number: 1 },
-    notion: { projects: PROJECTS, cards: CARDS, goals: GOALS, ideas: IDEAS, habitLog: HABITS },
+    notion: { projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS },
   });
   const http = createNotionHttp({ token: TOKEN, fetch: fake.fetch, sleep: async () => {} });
   const files = { 'board.config.json': JSON.stringify(cfg) };
@@ -351,36 +322,37 @@ function notionSetup() {
     headers: { host: HOST, origin: `http://${HOST}`, 'content-type': 'application/x-www-form-urlencoded' },
   }, { token: guard.formToken('sort', '1'), number: '1', target });
   const live = (id) => fake.state.dataSources[dashed(id)].pages.filter((p) => !p.trashed);
-  return { fake, sort, live };
+  return { fake, sort, live, ids };
 }
 
-test('U BR2-5 fileIdea: the Card was made in Project A and marking the idea filed failed; the retry with Project B moves the Card to B and files the idea', async () => {
-  const s = notionSetup();
+test('U BR2-5 fileIdea: the change to the idea failed in Project A; the retry with Project B puts the same task in B, creating nothing', async () => {
+  const s = await notionSetup();
   s.fake.fail((c) => c.method === 'PATCH' && c.path === '/v1/pages/' + I_SHELVES, 500);
   const first = await s.sort('alpha');
-  assert.equal(first.status, 502, 'marking the idea filed failed');
-  const cards = s.live(CARDS);
-  assert.equal(cards.length, 1);
-  assert.deepEqual(cards[0].values.Project, [P_A], 'the first Card is in Project A');
+  assert.equal(first.status, 502, 'the change failed');
+  const before = s.live(s.ids.tasks);
+  assert.equal(before.length, 1, 'nothing was created');
+  assert.ok(!before[0].values.Project || before[0].values.Project.length === 0, 'the idea is untouched');
 
   const second = await s.sort('bravo');
   assert.equal(second.status, 303);
-  const after = s.live(CARDS);
-  assert.equal(after.length, 1, 'no second Card');
-  assert.deepEqual(after[0].values.Project, [P_B], 'the Card takes the retry\'s Project');
-  assert.equal(s.live(IDEAS).find((p) => p.id === I_SHELVES).values.Filed, true, 'the idea is filed');
+  const after = s.live(s.ids.tasks);
+  assert.equal(after.length, 1, 'no second task');
+  assert.equal(after[0].id, I_SHELVES, 'the same page');
+  assert.deepEqual(after[0].values.Project, [P_B], 'the task takes the retry\'s Project');
+  assert.deepEqual(after[0].values.Tags || [], [], 'the Idea tag is gone');
 });
 
-test('U BR2-5 fileIdea: a retry with no goal clears the Goal the first attempt put on the Card', async () => {
-  const s = notionSetup();
+test('U BR2-5 fileIdea: a retry that names no goal leaves the task with no Goal', async () => {
+  const s = await notionSetup();
   s.fake.fail((c) => c.method === 'PATCH' && c.path === '/v1/pages/' + I_SHELVES, 500);
   assert.equal((await s.sort('alpha/1')).status, 502);
-  assert.deepEqual(s.live(CARDS)[0].values.Goal, [G_HALL], 'the first attempt put the Card under the goal');
+  assert.ok(!s.live(s.ids.tasks)[0].values.Goal || s.live(s.ids.tasks)[0].values.Goal.length === 0, 'the failed attempt wrote nothing');
 
   assert.equal((await s.sort('bravo')).status, 303);
-  const after = s.live(CARDS);
+  const after = s.live(s.ids.tasks);
   assert.equal(after.length, 1);
   assert.deepEqual(after[0].values.Project, [P_B]);
-  assert.ok(!after[0].values.Goal || after[0].values.Goal.length === 0, 'the retry named no goal, so the Card has none');
-  assert.equal(s.live(IDEAS).find((p) => p.id === I_SHELVES).values.Filed, true);
+  assert.ok(!after[0].values.Goal || after[0].values.Goal.length === 0, 'the retry named no goal, so the task has none');
+  assert.equal(s.live(s.ids.goals).length, 1);
 });

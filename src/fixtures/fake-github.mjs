@@ -174,6 +174,11 @@ export function createFakeGitHub({ repo = 'sam-life/life', ownerType = 'organiza
 
   function renderItem(it, project, ids) {
     const out = { id: it.id, node_id: it.node_id, content_type: it.content_type, content: copy(it.content), fields: [] };
+    if (it.content_type === 'Issue') { // the REST projectsV2 items API carries the issue's milestone
+      const home = allRepos.find((x) => x.full === itemRepo(it)) || main;
+      const held = home.issues.find((i) => i.number === it.content.number);
+      out.content.milestone = held && held.milestone ? copy(held.milestone) : null;
+    }
     if (blockersOf(allRepos.find((x) => x.full === itemRepo(it)) || main, it.content).length) {
       const ic = allRepos.find((x) => x.full === itemRepo(it)) || main;
       out.content.issue_dependencies_summary = summaryOf(ic, it.content);
@@ -224,6 +229,9 @@ export function createFakeGitHub({ repo = 'sam-life/life', ownerType = 'organiza
       return repoAnswer(made);
     }
     if (path === R && method === 'GET') return repoAnswer();
+    if (method === 'GET' && (m = /^\/users\/([^/]+)$/.exec(path)) && m[1].toLowerCase() === owner.toLowerCase()) {
+      return { login: owner, type: ownerType === 'user' ? 'User' : 'Organization' }; // who a login is, as GitHub answers it
+    }
     let c = main;
     if (!path.startsWith(R + '/') && !path.startsWith(P)) {
       if (!extra.length || !(m = /^\/repos\/([^/]+\/[^/]+)(\/.*)?$/.exec(path))) throw notFound();
@@ -302,7 +310,9 @@ export function createFakeGitHub({ repo = 'sam-life/life', ownerType = 'organiza
           const n = i.milestone && typeof i.milestone === 'object' ? i.milestone.number : i.milestone;
           return String(n) === ms;
         };
-        return c.issues.filter((i) => (s === 'all' || i.state === s)
+        const wantLabels = (query.get('labels') || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+        const hasLabels = (i) => wantLabels.every((w) => (i.labels || []).some((l) => String(l.name).toLowerCase() === w));
+        return c.issues.filter((i) => (s === 'all' || i.state === s) && hasLabels(i)
           && (sinceMs === null || Date.parse(i.updated_at) >= sinceMs) && inMilestone(i)).map((i) => answerIssue(c, i));
       }
       if (method === 'POST') {

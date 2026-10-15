@@ -1,6 +1,6 @@
 ---
 name: howgozit
-description: Use this when a person wants one page that shows all their projects, tasks, ideas and habits, kept on their own private GitHub. You interview them, propose the setup, get one approval, create everything on GitHub and start the board.
+description: Use this when a person wants one page that shows all their projects, tasks, ideas and habits, kept on their own private GitHub or in their own Notion workspace. You interview them, propose the setup, get one approval, create everything on GitHub and start the board.
 ---
 
 # Howgozit
@@ -45,7 +45,8 @@ All commands below are run from this skill's folder.
   Windows (PowerShell):
 
   ```
-  $env:BOARD_GITHUB_TOKEN = Read-Host "Paste your token"
+  $s = Read-Host "Paste your token" -AsSecureString
+  $env:BOARD_GITHUB_TOKEN = [System.Net.NetworkCredential]::new('', $s).Password
   ```
 
 - The variable only exists in the terminal where it was set. If your commands run in a different terminal, hand the person each command to run in theirs, and ask them to tell you what it printed.
@@ -59,16 +60,26 @@ All commands below are run from this skill's folder.
 
 Ask one question at a time. Wait for the answer. Keep the person's own words for titles.
 Do not offer a list of options when an open question works. Do not ask what you can work out.
+When you already have an answer, from Glitch or from earlier in the conversation, do not ask the question. Say what you have and ask only for a yes.
+You are running inside Glitch when the folder this conversation started in, or a folder above it, holds `glitch-mem/Memory/USER.md`. That folder is the Glitch folder; the two Glitch steps below run there, not in this skill's folder.
 
 1. "What are you working on, or want to work on? Say it however it comes. Big things, small things, half ideas."
-2. Read their list back, grouped. "Which of these belong together? A group is a project. Anything that stands alone stays on its own." Accept their grouping. Do not invent projects.
+2. Read their list back, grouped. Keep anything that sounds like a daily habit aside for question 4, and say so. "Which of these belong together? A group is a project. Anything that stands alone stays on its own." Accept their grouping. Do not invent projects.
+   If you are running inside Glitch, the person's Glitch workspaces are projects they already have. List them with `uv run --directory <Glitch folder>/.claude/scripts python workspaces.py list`, and take only the entries whose `status` is `active`, by their `slug`. Every other status is not a project of its own: a task inside another workspace, a copy, or a folder Glitch could not read. Offer them once, by name: "You already have these projects in Glitch: <names>. Shall I add them all as projects here too?" Add the ones they keep. A project added this way needs no stages or tasks; in question 3, ask only about the ones the person wants to fill in now.
 3. For each project, one at a time: "What is the next stage of this? Give me one or two." Each stage becomes a milestone. Then: "What are the first few things to do for it?" Aim for three to five tasks. Ask for a date only where the person already has one. Never push for dates.
-4. "Which habits do you want to keep? Pick a few, small ones, things you can do every day." Two to five is right. A habit may belong to a project if the person says so.
+4. "Which habits do you want to keep? Pick a few, small ones, things you can do every day. Or say 'not right now' if you don't want to track habits yet." Two to five is right. A habit may belong to a project if the person says so. "Not right now" means no habits; carry on without asking again.
 5. "Which of these projects matter most right now?" More than one is fine. These become the focus. A person with no answer gets no focus yet.
 6. "What is your first name, and what timezone are you in?" Convert a city or country to a name like `Europe/Brussels` yourself. Confirm it in plain words.
-7. Where it lives. Say it in two sentences:
-   "The board can live in a free GitHub organisation, which lets me give it a key limited to this one repository. Or it can live in your personal account, which works but needs a broader key that can reach all your repositories."
-   Then ask which they prefer, and what the account or organisation is called. Recommend the organisation.
+   If you are running inside Glitch, it already knows both: read the `Name` and `Timezone` lines under "Basic Info" in `glitch-mem/Memory/USER.md` in the Glitch folder. A line still holding a `<...>` placeholder is not filled in. When both are filled in, confirm them instead of asking: "I have you as <name>, on <timezone> time. Is that right?" Ask only for what is missing or wrong.
+7. Where it lives. First the difference, in two sentences:
+   "If you mostly work on coding projects, I would recommend GitHub, because the board then sits right beside your code. If your projects are not about code, you may find Notion more intuitive."
+   Then the places:
+   "On GitHub, the board can live in a free GitHub organisation, which lets me give it a key limited to this one repository, or in your personal account, which works but needs a broader key that can reach all your repositories. On Notion, it lives in your own Notion workspace, in four tables the setup makes for you. That needs a Notion workspace you own and a Notion token, and no GitHub at all."
+   Recommend by their projects: GitHub when they are mostly code, Notion when they are not. On GitHub, recommend the organisation.
+   Ask: GitHub organisation, GitHub personal account, or Notion.
+   One board lives in one place. If the projects are mixed, the person still picks one place; never set up both.
+   If they choose GitHub, ask what the account or organisation is called.
+   If they choose Notion, do not ask for an account name. Follow "The Notion road" below instead of Steps 2 and 3, and ask no more GitHub questions.
 
 If the person only gives you one project, or only habits, carry on. A small board is a good start.
 
@@ -146,6 +157,61 @@ Before each command, say in a sentence what it will do. If your harness asks for
 
 The board stops when the terminal closes. To start it again later, run the same start command.
 Keeping the token for next time and starting the board at login are in `references/deploy-local.md`.
+
+## The Notion road
+
+Use this instead of Steps 2 and 3 when the person chose Notion. Steps 1 and 4 stay the same, and the ground rules hold, with `BOARD_NOTION_TOKEN` in place of `BOARD_GITHUB_TOKEN`.
+Notion needs no repository. It makes a page called Howgozit with four tables in the person's workspace.
+The person needs a Notion workspace of their own, one they are the owner of. Say so plainly before the token. If they only belong to someone else's workspace, such as their employer's, have them make a personal one first (free in Notion); they become its owner.
+
+1. The token. Walk the person through making a Notion personal access token by reading `references/notion-setup.md`, section "1. Make a token", including where to find it in Notion. Do not ask them to read it to you.
+   Never ask them to paste the token into the chat. Tell them to type it in their own terminal:
+
+   macOS or Linux (the token is typed unseen):
+
+   ```
+   read -s BOARD_NOTION_TOKEN; export BOARD_NOTION_TOKEN
+   ```
+
+   Windows (PowerShell):
+
+   ```
+   $s = Read-Host "Paste your token" -AsSecureString
+   $env:BOARD_NOTION_TOKEN = [System.Net.NetworkCredential]::new('', $s).Password
+   ```
+
+   If the person cannot make a personal access token, offer the backup: an internal connection, with a page shared with it and its id given as `--parent`; `references/notion-setup.md` explains. Say: "This is a backup road; your agent might need to tinker a little."
+2. The proposal. Write `proposal.json` in this folder from the same interview answers, in the shape of `references/setup-proposal.md` but with no `owner` and no `repo`. `name` and `timezone` are required.
+   If the person has habits, ask once: "Would you like to score any of these from 1 to 10 instead of ticking it, like mood or energy?" Put `"score": { "min": 1, "max": 10 }` on each habit they name. Leave it off the others.
+   Show it in plain words, as in Step 2, but end "what will be created" with: "a page called Howgozit in your Notion, four tables in it, a row for every project, stage and task, and a small settings file on this computer".
+3. Look first. This sends nothing to Notion and writes nothing.
+
+   ```
+   node scripts/notion-setup.mjs plan proposal.json
+   ```
+
+   Read the list back in plain words: how many projects, stages and tasks, what is new, and where the settings file would go. Then ask for ONE yes, saying what it covers.
+   A "looks good" is not a yes. Create nothing in Notion before it.
+4. Do it, after the yes.
+
+   ```
+   node scripts/notion-setup.mjs apply proposal.json
+   ```
+
+   The settings file is written to `./config/board.config.json` in this folder. Add `--config-dir <folder>` to put it elsewhere.
+   An internal connection adds `--parent <page id>`.
+   Running it again with the same proposal creates nothing twice, so a stopped run is safe to repeat.
+   If the person later asks you to remove it all, `references/notion-setup.md`, section "Removing it".
+5. It ends by printing the lines to set. Give them to the person, one at a time, to run in their own terminal:
+   - `BOARD_BACKEND=notion`
+   - `BOARD_NOTION_TOKEN` (already set in step 1)
+   - `BOARD_CONFIG_DIR` set to the folder the settings file is in.
+   - `BOARD_FORM_KEY`, a key that signs the page's forms. Have them run `node -e "console.log(require('crypto').randomBytes(36).toString('base64url'))"` and set the result without pasting it into the chat.
+6. Start the board in the same terminal with `node board/server.mjs`. It listens on `http://localhost:8787` unless `BOARD_PORT` is set.
+7. Check it. `http://localhost:8787/healthz` should answer `ok`. Then ask them to open `http://localhost:8787`: they should see a page headed with their name, every project of the proposal, the tasks under "What's next", their habits and their ideas box, as in Step 3, item 6.
+   A project they add later in Notion shows with no settings edit. If the page is empty, see "What you should see" in `references/notion-setup.md`.
+
+Adding a project later on Notion: the person adds a row to the Projects table in Notion and it shows on the next read, with no settings edit.
 
 ## Step 4: After
 

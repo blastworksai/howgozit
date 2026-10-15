@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeGitHub } from '../fixtures/fake-github.mjs';
 import { createFakeNotion } from '../fixtures/fake-notion.mjs';
+import { seedHowgozit } from '../fixtures/notion-howgozit.mjs';
 import { createNotionHttp } from '../board/notion/http.mjs';
 import { createNotionAdapter } from '../board/notion/adapter.mjs';
 import { createLoader } from '../board/load.mjs';
@@ -66,7 +67,7 @@ async function githubWorld() {
   const s = baseSettings({ ...common, habitsProject: { owner: 'sam-life', number: 21 } });
   const fake = createFakeGitHub({ repo: REPO, files: { 'board.config.json': JSON.stringify(s) } });
   const send = (m, p, b) => fake.http.send(m, R + p, b);
-  await send('POST', '/labels', { name: 'DO', color: '0e8a16' });
+  await send('POST', '/labels', { name: 'DO', color: 'b60205' });
   await send('POST', '/labels', { name: 'idea', color: 'ededed' });
   await send('POST', '/labels', { name: 'habit:mood', color: 'ededed' });
   await send('POST', '/milestones', { title: 'House · Hallway', due_on: '2026-10-20T00:00:00Z' });
@@ -98,70 +99,19 @@ async function githubWorld() {
 }
 
 // ---- Notion side ----
-const DS = {
-  projects: 'a0a0a0a0a0a0a0a0a0a0a0a0a0a0a001',
-  cards: 'a0a0a0a0a0a0a0a0a0a0a0a0a0a0a002',
-  goals: 'a0a0a0a0a0a0a0a0a0a0a0a0a0a0a003',
-  ideas: 'a0a0a0a0a0a0a0a0a0a0a0a0a0a0a004',
-  habitLog: 'a0a0a0a0a0a0a0a0a0a0a0a0a0a0a005',
-};
 const PAGE = (n) => 'b0b0b0b0b0b0b0b0b0b0b0b0b0b0' + String(n).padStart(4, '0');
 
 async function notionWorld() {
-  const s = baseSettings({ ...common, habitsProject: { owner: 'notion', number: 21 }, notion: { ...DS } });
-  const fake = createFakeNotion({
-    token: 'ntn_fake_token',
-    dataSources: {
-      [DS.projects]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' } } },
-      [DS.cards]: {
-        properties: {
-          Name: { type: 'title' },
-          ID: { type: 'unique_id' },
-          Status: {
-            type: 'status',
-            options: [{ name: 'Not started' }, { name: 'In progress' }, { name: 'Done' }],
-            groups: [
-              { name: 'To-do', option_ids: ['Not started'] },
-              { name: 'In progress', option_ids: ['In progress'] },
-              { name: 'Complete', option_ids: ['Done'] },
-            ],
-          },
-          Project: { type: 'relation', data_source_id: DS.projects },
-          Goal: { type: 'relation', data_source_id: DS.goals },
-          'Blocked by': { type: 'relation', data_source_id: DS.cards },
-          Mode: { type: 'select', options: [{ name: 'DO', color: 'green' }] },
-          Due: { type: 'date' },
-        },
-      },
-      [DS.goals]: {
-        properties: {
-          Name: { type: 'title' },
-          ID: { type: 'unique_id' },
-          Project: { type: 'relation', data_source_id: DS.projects },
-          Due: { type: 'date' },
-          Done: { type: 'checkbox' },
-        },
-      },
-      [DS.ideas]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Filed: { type: 'checkbox' } } },
-      [DS.habitLog]: {
-        properties: {
-          Name: { type: 'title' },
-          ID: { type: 'unique_id' },
-          Habit: { type: 'select', options: [{ name: 'mood' }] },
-          Date: { type: 'date' },
-          Done: { type: 'checkbox' },
-          Score: { type: 'number' },
-        },
-      },
-    },
-  });
+  const fake = createFakeNotion({ token: 'ntn_fake_token' });
+  const DS = await seedHowgozit(fake, { habits: ['mood'] });
+  const s = baseSettings({ ...common, habitsProject: { owner: 'notion', number: 21 }, notion: { projects: DS.projects, tasks: DS.tasks, goals: DS.goals, habitLog: DS.habitLog } });
   const at = (n, edited = EARLY, created = EARLY) => ({ id: PAGE(n), created, edited });
-  fake.addPage(DS.projects, { Name: 'House', ID: 3 }, at(1));
-  fake.addPage(DS.goals, { Name: 'Hallway', ID: 1, Project: [PAGE(1)], Due: '2026-10-20' }, at(2));
-  fake.addPage(DS.cards, { Name: 'Paint the hallway', ID: 1, Status: 'Not started', Project: [PAGE(1)], Goal: [PAGE(2)], Mode: 'DO', Due: '2026-10-18', 'Blocked by': [PAGE(4)] }, at(3));
-  fake.addPage(DS.cards, { Name: 'Buy paint', ID: 2, Status: 'In progress', Project: [PAGE(1)], Goal: [PAGE(2)] }, at(4));
-  fake.addPage(DS.cards, { Name: 'Sand the door', ID: 3, Status: 'Done', Project: [PAGE(1)], Goal: [PAGE(2)] }, at(5, SAND_CLOSED));
-  fake.addPage(DS.ideas, { Name: 'Paint the shed', ID: 4 }, at(6));
+  fake.addPage(DS.projects, { 'Project name': 'House', ID: 3 }, at(1));
+  fake.addPage(DS.goals, { 'Goal name': 'Hallway', ID: 1, Project: [PAGE(1)], Due: '2026-10-20' }, at(2));
+  fake.addPage(DS.tasks, { 'Task name': 'Paint the hallway', ID: 1, Status: 'Not started', Project: [PAGE(1)], Goal: [PAGE(2)], Tags: ['DO'], Due: '2026-10-18', 'Blocked by': [PAGE(4)] }, at(3));
+  fake.addPage(DS.tasks, { 'Task name': 'Buy paint', ID: 2, Status: 'In progress', Project: [PAGE(1)], Goal: [PAGE(2)] }, at(4));
+  fake.addPage(DS.tasks, { 'Task name': 'Sand the door', ID: 3, Status: 'Done', Project: [PAGE(1)], Goal: [PAGE(2)] }, at(5, SAND_CLOSED));
+  fake.addPage(DS.tasks, { 'Task name': 'Paint the shed', ID: 4, Status: 'Not started', Tags: ['Idea'] }, at(6));
   fake.addPage(DS.habitLog, { Name: 'Mood · 2026-10-12', ID: 5, Habit: 'mood', Date: '2026-10-12', Done: true, Score: 7 }, at(7, MOOD_CLOSED, MOOD_CREATED));
   const http = createNotionHttp({ token: 'ntn_fake_token', fetch: fake.fetch, sleep: async () => {} });
   const readFile = async (p) => {

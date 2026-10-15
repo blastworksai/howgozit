@@ -380,14 +380,23 @@ test('U the log has one METHOD path status line per request with no query string
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(log.length, 4);
     for (const line of log) {
-      assert.match(line, /^[A-Z]+ \/\S* \d{3}$/);
+      assert.match(line, /^[A-Z]+ \/\S* \d{3} \d+ms$/);
       assert.ok(!line.includes('?'));
       assert.ok(!line.includes('secret'));
       assert.ok(!line.includes(TOKEN));
     }
-    assert.ok(log.includes('GET /healthz 200'));
-    assert.ok(log.includes('GET /admin 404'));
+    assert.ok(log.some((l) => /^GET \/healthz 200 \d+ms$/.test(l)));
+    assert.ok(log.some((l) => /^GET \/admin 404 \d+ms$/.test(l)));
     assert.ok(log.some((l) => l.startsWith('GET / ')));
+  });
+});
+
+test('U the request log line ends with the whole milliseconds the request took', async () => {
+  await withServer({}, async ({ port, log }) => {
+    await sendRequest(port, { reqPath: '/healthz' });
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(log.length, 1);
+    assert.match(log[0], /^GET \/healthz 200 \d+ms$/);
   });
 });
 

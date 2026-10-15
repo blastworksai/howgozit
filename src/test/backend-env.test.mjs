@@ -21,6 +21,6 @@ test('U BOARD_BACKEND notion with a form key and no BOARD_NOTION_TOKEN is refuse
   const key = 'k'.repeat(32);
   const r = readEnv({ ...base, BOARD_BACKEND: 'notion', BOARD_FORM_KEY: key });
   assert.equal(r.ok, false);
-  assert.equal(r.message, 'Set BOARD_NOTION_TOKEN to a Notion token that can read your five data sources.');
+  assert.equal(r.message, 'Set BOARD_NOTION_TOKEN to a Notion token that can read your four data sources.');
   assert.equal(r.message.includes(key), false, 'no value appears in the sentence');
 });

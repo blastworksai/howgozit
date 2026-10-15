@@ -3,79 +3,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeNotion } from '../fixtures/fake-notion.mjs';
+import { seedHowgozit } from '../fixtures/notion-howgozit.mjs';
 import { createNotionHttp } from '../board/notion/http.mjs';
 import { createStore, readNotion } from '../board/notion/read.mjs';
 import { settings as baseSettings } from '../fixtures/build.mjs';
 
-const PROJECTS = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01';
-const CARDS = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa02';
-const GOALS = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa03';
-const IDEAS = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa04';
-const HABITS = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05';
+// The four data source ids, set by world() from seedHowgozit (tests in a file run one after another).
+let PROJECTS, TASKS, GOALS, HABITS; // dashed, as the fake hands them out; flat() is the 32-hex form
 const TOKEN = 'ntn_fake_token';
 
 const MIN = 60 * 1000;
 const T0 = Date.parse('2026-10-12T06:10:00Z');
 const iso = (ms) => new Date(ms).toISOString();
 
-function schema() {
-  return {
-    [PROJECTS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' } } },
-    [CARDS]: {
-      properties: {
-        Name: { type: 'title' },
-        ID: { type: 'unique_id' },
-        Status: {
-          type: 'status',
-          options: [{ name: 'Not started' }, { name: 'In progress' }, { name: 'Done' }],
-          groups: [
-            { name: 'To-do', option_ids: ['Not started'] },
-            { name: 'In progress', option_ids: ['In progress'] },
-            { name: 'Complete', option_ids: ['Done'] },
-          ],
-        },
-        Project: { type: 'relation', data_source_id: PROJECTS },
-        Goal: { type: 'relation', data_source_id: GOALS },
-        'Blocked by': { type: 'relation', data_source_id: CARDS },
-        Mode: { type: 'select', options: [{ name: 'DO', color: 'green' }] },
-        Due: { type: 'date' },
-      },
-    },
-    [GOALS]: {
-      properties: {
-        Name: { type: 'title' },
-        ID: { type: 'unique_id' },
-        Project: { type: 'relation', data_source_id: PROJECTS },
-        Due: { type: 'date' },
-        Done: { type: 'checkbox' },
-      },
-    },
-    [IDEAS]: { properties: { Name: { type: 'title' }, ID: { type: 'unique_id' }, Filed: { type: 'checkbox' } } },
-    [HABITS]: {
-      properties: {
-        Name: { type: 'title' },
-        ID: { type: 'unique_id' },
-        Habit: { type: 'select', options: [{ name: 'mood' }] },
-        Date: { type: 'date' },
-        Done: { type: 'checkbox' },
-        Score: { type: 'number' },
-      },
-    },
-  };
-}
-
-function world() {
-  const fake = createFakeNotion({ token: TOKEN, dataSources: schema() });
+async function world() {
+  const fake = createFakeNotion({ token: TOKEN });
+  ({ projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS } = await seedHowgozit(fake, { habits: ['mood'] }));
   const http = createNotionHttp({ token: TOKEN, fetch: fake.fetch, sleep: async () => {} });
-  const settings = baseSettings({ notion: { projects: PROJECTS, cards: CARDS, goals: GOALS, ideas: IDEAS, habitLog: HABITS } });
+  const settings = baseSettings({ notion: { projects: PROJECTS, tasks: TASKS, goals: GOALS, habitLog: HABITS } });
   return { fake, http, settings, store: createStore() };
 }
 
 // The pages of a data source as the fake holds them (live state), for tests that need a shape the API cannot write.
-const pagesOf = (fake, ds) => Object.values(fake.state.dataSources).find((d) => d.id.replace(/-/g, '') === ds).pages;
+const pagesOf = (fake, ds) => fake.state.dataSources[ds].pages;
 
 // Requests to one data source's query route made after call index `from`.
-const queriesOf = (fake, ds, from = 0) => fake.calls.slice(from).filter((c) => c.method === 'POST' && c.path.replace(/-/g, '').startsWith('/v1/data_sources/' + ds + '/query'));
+const flat = (id) => id.replace(/-/g, '');
+const queriesOf = (fake, ds, from = 0) => fake.calls.slice(from).filter((c) => c.method === 'POST' && c.path.replace(/-/g, '').startsWith('/v1/data_sources/' + flat(ds) + '/query'));
 
 // Finds the last_edited_time timestamp filter anywhere in a (possibly `and`-wrapped) filter.
 function timestampFilter(filter) {
@@ -86,11 +40,11 @@ function timestampFilter(filter) {
 }
 
 test('R144 a card is numbered by its ID property and its ref is notion:<page id>; a card without an ID is skipped and counted', async () => {
-  const w = world();
-  const seven = w.fake.addPage(CARDS, { Name: 'Seven', ID: 7, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb07', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
-  const none = w.fake.addPage(CARDS, { Name: 'No number', Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb08', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const w = await world();
+  const seven = w.fake.addPage(TASKS, { 'Task name': 'Seven', ID: 7, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb07', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const none = w.fake.addPage(TASKS, { 'Task name': 'No number', Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb08', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
   // The fake assigns an ID on create; Notion can hold a row with none, so take it away in the live world.
-  pagesOf(w.fake, CARDS).find((p) => p.id === none.id).values.ID = null;
+  pagesOf(w.fake, TASKS).find((p) => p.id === none.id).values.ID = null;
 
   const { raw, warnings } = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
 
@@ -106,9 +60,9 @@ test('R144 a card is numbered by its ID property and its ref is notion:<page id>
 });
 
 test('R144 a goal is numbered by its ID property too, and a goal without one is skipped and counted', async () => {
-  const w = world();
-  w.fake.addPage(GOALS, { Name: 'Hallway', ID: 2 }, { id: 'cccccccccccccccccccccccccccccc02', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
-  const none = w.fake.addPage(GOALS, { Name: 'Nameless number' }, { id: 'cccccccccccccccccccccccccccccc03', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const w = await world();
+  w.fake.addPage(GOALS, { 'Goal name': 'Hallway', ID: 2 }, { id: 'cccccccccccccccccccccccccccccc02', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const none = w.fake.addPage(GOALS, { 'Goal name': 'Nameless number' }, { id: 'cccccccccccccccccccccccccccccc03', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
   pagesOf(w.fake, GOALS).find((p) => p.id === none.id).values.ID = null;
 
   const { raw, warnings } = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
@@ -123,9 +77,9 @@ test('R144 a goal is numbered by its ID property too, and a goal without one is 
 
 // A world with a full read behind it: card A is older than the delta window, card B sits inside it.
 async function afterFirstRead() {
-  const w = world();
-  const a = w.fake.addPage(CARDS, { Name: 'Old card', ID: 1, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb01', created: '2026-10-01T08:00:00Z', edited: '2026-10-12T06:00:00Z' });
-  const b = w.fake.addPage(CARDS, { Name: 'Busy card', ID: 2, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb02', created: '2026-10-01T08:00:00Z', edited: '2026-10-12T06:08:00Z' });
+  const w = await world();
+  const a = w.fake.addPage(TASKS, { 'Task name': 'Old card', ID: 1, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb01', created: '2026-10-01T08:00:00Z', edited: '2026-10-12T06:00:00Z' });
+  const b = w.fake.addPage(TASKS, { 'Task name': 'Busy card', ID: 2, Status: 'Not started' }, { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb02', created: '2026-10-01T08:00:00Z', edited: '2026-10-12T06:08:00Z' });
   const first = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
   return { w, a, b, first };
 }
@@ -148,7 +102,7 @@ test('R145 a delta read merges a row that changed since the last read and keeps 
 
 test('R145 the delta query filters on last_edited_time after the last read minus five minutes; the full read does not', async () => {
   const { w } = await afterFirstRead();
-  const firstQueries = queriesOf(w.fake, CARDS);
+  const firstQueries = queriesOf(w.fake, TASKS);
   assert.ok(firstQueries.length >= 1);
   for (const q of firstQueries) assert.equal(timestampFilter(q.body && q.body.filter), null, 'a full read asks for every row');
 
@@ -156,7 +110,7 @@ test('R145 the delta query filters on last_edited_time after the last read minus
   const nowMs = T0 + 10 * MIN;
   await readNotion(w.http, w.store, { settings: w.settings, full: false, now: iso(nowMs) });
 
-  for (const ds of [PROJECTS, CARDS, GOALS, IDEAS, HABITS]) {
+  for (const ds of [PROJECTS, TASKS, GOALS, HABITS]) {
     const qs = queriesOf(w.fake, ds, before);
     assert.ok(qs.length >= 1, 'a delta read queries ' + ds);
     for (const q of qs) {
@@ -182,7 +136,7 @@ test('R145 a deleted row is still there after a delta read and gone after the ne
 
 test('R145 a failed delta read changes nothing that was held', async () => {
   const { w } = await afterFirstRead();
-  w.fake.fail((c) => c.method === 'POST' && c.path.replace(/-/g, '').includes(GOALS), 500);
+  w.fake.fail((c) => c.method === 'POST' && c.path.replace(/-/g, '').includes(flat(GOALS)), 500);
   await assert.rejects(readNotion(w.http, w.store, { settings: w.settings, full: false, now: iso(T0 + 10 * MIN) }));
   // the store still answers as before: a later successful delta read finds both cards
   const again = await readNotion(w.http, w.store, { settings: w.settings, full: false, now: iso(T0 + 11 * MIN) });
@@ -196,14 +150,14 @@ const waitingOf = (raw, title) => {
 };
 
 test('R146 a relation of 60 values is read whole, not cut at 25', async () => {
-  const w = world();
+  const w = await world();
   const ids = [];
   for (let i = 1; i <= 60; i += 1) {
     const id = 'dddddddddddddddddddddddddddd' + String(i).padStart(4, '0');
     ids.push(id);
-    w.fake.addPage(CARDS, { Name: 'Blocker ' + i, Status: 'Not started' }, { id, created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+    w.fake.addPage(TASKS, { 'Task name': 'Blocker ' + i, Status: 'Not started' }, { id, created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
   }
-  w.fake.addPage(CARDS, { Name: 'Blocked card', Status: 'Not started', 'Blocked by': ids }, { id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  w.fake.addPage(TASKS, { 'Task name': 'Blocked card', Status: 'Not started', 'Blocked by': ids }, { id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
 
   const { raw, warnings } = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
 
@@ -216,12 +170,12 @@ test('R146 a relation of 60 values is read whole, not cut at 25', async () => {
 });
 
 test('R146 a relation that needs more than 20 pages stops with partial and too-much-data', async () => {
-  const w = world();
-  const target = w.fake.addPage(CARDS, { Name: 'Huge relation', Status: 'Not started' }, { id: 'ffffffffffffffffffffffffffffffff', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const w = await world();
+  const target = w.fake.addPage(TASKS, { 'Task name': 'Huge relation', Status: 'Not started' }, { id: 'ffffffffffffffffffffffffffffffff', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
   // 700 values is 28 pages of 25. The write route refuses more than 100, so set them in the live world.
   const many = [];
   for (let i = 1; i <= 700; i += 1) many.push('00000000-0000-4000-9000-' + i.toString(16).padStart(12, '0'));
-  pagesOf(w.fake, CARDS).find((p) => p.id === target.id).values['Blocked by'] = many;
+  pagesOf(w.fake, TASKS).find((p) => p.id === target.id).values['Blocked by'] = many;
 
   const { raw, warnings } = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
 
@@ -233,8 +187,8 @@ test('R146 a relation that needs more than 20 pages stops with partial and too-m
 });
 
 test('R143 a Habits number that a listed project already uses is ignored and counted as setting-invalid', async () => {
-  const w = world();
-  w.fake.addPage(PROJECTS, { Name: 'House', ID: 3 }, { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa03', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
+  const w = await world();
+  w.fake.addPage(PROJECTS, { 'Project name': 'House', ID: 3 }, { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa03', created: '2026-10-01T08:00:00Z', edited: '2026-10-01T08:00:00Z' });
   w.settings = { ...w.settings, projects: [{ key: 'house', number: 3, owner: 'notion' }], habitsProject: { owner: 'notion', number: 3 } };
 
   const { raw, warnings } = await readNotion(w.http, w.store, { settings: w.settings, full: true, now: iso(T0) });
@@ -243,7 +197,7 @@ test('R143 a Habits number that a listed project already uses is ignored and cou
   assert.equal(raw.projects.filter((p) => p.number === 3).length, 1, 'the listed project stays');
   assert.deepEqual(warnings.filter((x) => x.code === 'setting-invalid'), [{ code: 'setting-invalid', count: 1 }]);
 
-  const ok = world();
+  const ok = await world();
   ok.settings = { ...ok.settings, habitsProject: { owner: 'notion', number: 999 } };
   const again = await readNotion(ok.http, ok.store, { settings: ok.settings, full: true, now: iso(T0) });
   assert.equal(again.raw.projects.some((p) => p.role === 'habits'), true);

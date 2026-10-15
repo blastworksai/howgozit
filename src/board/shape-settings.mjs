@@ -61,7 +61,7 @@ function isRealDate(s) {
   return d <= len;
 }
 
-function isKnownZone(tz) {
+export function isKnownZone(tz) {
   if (!nonEmpty(tz)) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });

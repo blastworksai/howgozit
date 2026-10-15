@@ -236,7 +236,7 @@ test('U items carry Status Todo and Due once set, and only a Title without the f
   assert.equal(entry(withF[0], 'Due').value, '2026-11-10T00:00:00+00:00');
   assert.equal(entry(withF[1], 'Due').value, null);
   assert.equal(withF[0].content_type, 'Issue');
-  assert.deepEqual(withF[0].content, { number: 1, title: 'Paint', repository: { full_name: 'sam-life/life' } });
+  assert.deepEqual(withF[0].content, { number: 1, title: 'Paint', milestone: null, repository: { full_name: 'sam-life/life' } });
   const plain = (await f.http.paged(P + '/1/items?per_page=100', { maxPages: 20 })).items;
   assert.deepEqual(plain[0].fields.map((x) => x.name), ['Title']);
 });

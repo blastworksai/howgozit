@@ -12,7 +12,7 @@ Run everything from the repository root.
 - Named rules, failing when a named rule has no test: `node scripts/rules.mjs 17 18 S3`
 
 Every test name starts with the ID of the rule it proves and a space (`R17 …`, `S3 …`), or with `U ` for a helper test that proves no rule.
-`test/contract-coverage.test.mjs` fails when a rule R1 to R150 or S1 to S8 has no test, or a test names a rule that is not in this file.
+`test/contract-coverage.test.mjs` fails when a rule R1 to R156 or S1 to S8 has no test, or a test names a rule that is not in this file.
 Each check below is written as "Given … expect …"; the test builds the "given" with `fixtures/build.mjs` unless a fixture file is named.
 
 ## Words
@@ -861,15 +861,16 @@ Check: given two loads, expect the fields address asked once.
 
 ### Reading Notion
 
-**R143. A Notion board reads five data sources the settings name.**
-`notion: { projects, cards, goals, ideas, habitLog }` holds their ids, which are not secrets.
+**R143. A Notion board reads four data sources the settings name.**
+`notion: { projects, tasks, goals, habitLog }` holds their ids, which are not secrets: Notion's own Projects and Tasks, a Goals table and a Habit log.
+A setting that lacks one of the four, or names an id that is not a Notion id, refuses the read with one plain sentence that names the four.
 Settings, theme and state come from `BOARD_CONFIG_DIR`, which is required on a Notion board.
 Check: given no config dir, expect a refusal to start with one plain sentence.
 
-**R144. A Notion card and goal are numbered by their `ID` property.**
+**R144. A Notion task and goal are numbered by their `ID` property.**
 The `unique_id` of the `ID` property gives `number`, and `ref` is `notion:<page id>`.
 A row without an `ID` is skipped and adds one to `row-skipped`.
-Check: given a card with `ID` 7 and a card with none, expect one card numbered 7 with ref `notion:<its page id>` and `row-skipped` at 1.
+Check: given a task with `ID` 7 and a task with none, expect one card numbered 7 with ref `notion:<its page id>` and `row-skipped` at 1; given a goal with `ID` 3, expect a goal numbered 3.
 
 **R145. Notion is read in changes and once a day in full.**
 Between full reads, rows are queried with `last_edited_time` after the last read minus five minutes and merged by ref.
@@ -888,6 +889,49 @@ Check: given one 429 with `Retry-After` 2, expect one wait of 2 seconds and a go
 **R149. Both back-ends give the same board for the same world.**
 One scenario (projects, cards, goals, a blocker, an idea, a scored check-in) built on both fakes gives the same board apart from URLs, the source tag and refs.
 Check: given that scenario on both fakes, expect the two boards equal once URLs, the `GH`/`NT` tag and refs are removed.
+
+**R151. On Notion an idea is a task tagged `Idea` with no Project.**
+A task whose `Tags` hold `Idea` and whose `Project` is empty is an idea in the backlog and never a card; a task with a Project is a card whatever its tags.
+Logging an idea creates one task with the `Idea` tag; filing it patches that same page once, setting its `Project` and `Goal` (or none) and removing `Idea` while keeping every other tag.
+A retried filing patches the same page again and creates nothing.
+Check: given an idea-tagged task with no Project and one with a Project, expect one idea and one card; given a filing of an idea tagged `Idea` and `DO`, expect one PATCH on that page leaving `DO` and no new page; given the same filing twice, expect no page created.
+
+**R152. On Notion a card's modes are tags.**
+A card's mode labels are the `Tags` it holds that the settings' `modes` name, in the order the settings give them, as a GitHub card's mode labels are; a tag that is not a mode is never a label, and a card with no mode tag has none.
+A mode's colour is that `Tags` option's colour, through the setup palette.
+Check: given a card tagged `THINK` and `DO` with modes `DO, THINK`, expect the labels `DO` then `THINK`; given a card tagged only `Urgent`, expect no label; given `DO` coloured green, expect its chip `#0e8a16`.
+
+### Notion setup and copy
+
+**R153. The copier reads GitHub and writes only to Notion.**
+`scripts/copy-to-notion.mjs` has `plan`, `apply --confirm` and `verify`.
+It sends GitHub nothing but reads, and it writes to Notion only the four tables the settings name.
+It copies the listed projects, the open cards with their status, due date, mode, project, goal and open blockers, the goals they use, the open ideas, and every habit check-in of all time with its score; closed cards stay on GitHub.
+It writes the Notion board's settings, theme and state beside each other, with each project keyed as before and owned by `notion`.
+`apply` refuses a plan whose digest no longer matches what GitHub holds, and an unknown status name refuses the plan.
+A record is saved after every write, and an apply run again or resumed after a crash never makes a second copy of a row.
+`verify` reads both sides again, the Habit log with no date window, and passes only when every copied row matches.
+Check: given the copy world, expect apply then verify to pass, a second apply to create nothing, a crash after three writes then a resume to leave no duplicate, a stale digest and an unknown status each refused, every GitHub request a read, and no token in any output line or record.
+
+**R154. The setup script builds the Notion tables once.**
+`scripts/notion-setup.mjs` creates a page called Howgozit with the four tables, their relations and their rollups, and prints the settings `notion` block.
+A second run changes nothing and prints the same block; it touches nothing it did not create.
+An internal connection, which cannot create a page at the top of a workspace, needs `--parent <page id>`, and the script says so in one plain sentence.
+Check: given an empty fake workspace, expect the four tables and the block; given a second run, expect no write; given an internal token without `--parent`, expect that refusal.
+
+**R155. On Notion the Projects rows are the project list.**
+A Notion board whose settings have no `projects` list shows every Projects row whose Status is not in the Complete group, in `ID` order, each keyed `notion-<ID>` and owned by `notion`; the adapter hands the model that list as if the settings held it, so the model never knows where it came from (R150).
+A settings `projects` list, when present, still decides which rows show and in what order.
+`focus` and a habit's `project` may name a `notion-<ID>` key.
+A row added in Notion shows on the next read with no settings edit; a row moved to Done drops off.
+Check: given no `projects` list and three Projects rows, one Done, expect two projects keyed `notion-<ID>` in ID order; given a list naming one row, expect only that row; given a row added between two reads, expect it on the second; given `focus: ["notion-2"]`, expect that project in focus.
+
+**R156. The setup script builds a starter board from a proposal.**
+`scripts/notion-setup.mjs plan <proposal.json>` lists every table, row and file it would create and writes nothing; `apply <proposal.json>` creates the tables if they are missing (R154), then one Projects row per project, one Goals row per milestone with its Project, one Tasks row per task with its Project and Goal, and a complete starter `board.config.json` in `--config-dir`: the `notion` block, no `projects` list (R155), the habits, modes, focus by `notion-<ID>` key, name and timezone.
+The proposal has the shape of `references/setup-proposal.md` without `owner` and `repo`.
+A record is saved after every write, and a second apply, or one resumed after a crash, never makes a second row.
+It ends by printing the environment lines to set, the form key made by a one-line command, never by the script.
+Check: given an empty fake workspace and the example proposal, expect the rows, the settings file, and a board that renders every proposed project and task; given a second apply, expect no write; given a crash after three writes then a resume, expect no duplicate; given `plan`, expect no write.
 
 ### Output safety
 

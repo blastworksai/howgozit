@@ -1,4 +1,6 @@
-// write: the five Notion write verbs (cp9-interface §4; contract R56 to R61, R140, R143).
+// write: the five Notion write verbs (cp9-interface §4; contract R56 to R61, R140, R143, R151).
+// A Notion board has four data sources: projects, tasks, goals and habitLog (R151). An idea is a task tagged Idea with no
+// Project; filing it is one change to that same task, never a new page.
 // Each verb keeps the argument shape actions.mjs gives the GitHub verbs. A bare number is mapped to a page id through the
 // store rows of that verb's own data source, and every page a write returns goes into the store, so the reload after an
 // action shows the change even when Notion's query runs behind. A failure is a BackendError; nothing of a response, a
@@ -9,9 +11,10 @@ import { normalize } from './read.mjs';
 
 const EMPTY = () => ({ cards: [], items: [] });
 const GONE = 'That row is not on the board any more; reload the page.';
-const NO_COMPLETE = 'The Status of Cards has no option in its Complete group.';
+const NO_COMPLETE = 'The Status of Tasks has no option in its Complete group.';
 const UNACCEPTED = 'Notion did not accept the change.';
-const NO_BLOCK = 'The settings need a notion block with the five data source ids; see notion-setup.md.';
+const NO_BLOCK = 'The settings need a notion block with the four data source ids (projects, tasks, goals, habitLog); see notion-setup.md.';
+const WRONG_GOAL = 'That goal belongs to a different project; pick a goal of the project you are filing under.';
 const DEFAULT_PREFIX = 'habit:';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -83,7 +86,7 @@ export function notionVerbs({ http, store, settingsOf }) {
 
   return {
     logIdea: guard(async ({ title }) => {
-      await create('ideas', { title: text(title) });
+      await create('tasks', { title: text(title), Tags: { multi_select: [{ name: 'Idea' }] } });
       return EMPTY();
     }),
 
@@ -108,42 +111,34 @@ export function notionVerbs({ http, store, settingsOf }) {
       // the idea: by the page id in plan.idea.ref when it names one the store holds, else by number
       let idea = null;
       const ref = plan && isObj(plan.idea) && typeof plan.idea.ref === 'string' ? plan.idea.ref : null;
-      if (ref !== null && ref.startsWith('notion:')) idea = store.rows.ideas.get(ref.slice('notion:'.length)) ?? null;
-      if (idea === null) idea = rowByNumber('ideas', plan && isObj(plan.idea) && plan.idea.number !== undefined ? plan.idea.number : args.number);
+      if (ref !== null && ref.startsWith('notion:')) idea = store.rows.tasks.get(ref.slice('notion:'.length)) ?? null;
+      if (idea === null) idea = rowByNumber('tasks', plan && isObj(plan.idea) && plan.idea.number !== undefined ? plan.idea.number : args.number);
       const project = rowByNumber('projects', plan && isObj(plan.project) && plan.project.number !== undefined ? plan.project.number : args.projectNumber);
       const goal = args.milestone !== null && args.milestone !== undefined ? rowByNumber('goals', args.milestone) : null;
+      if (goal !== null && !(Array.isArray(goal.projectIds) && goal.projectIds.includes(project.id))) throw new BackendError('invalid', null, WRONG_GOAL);
+
+      // A multi_select write replaces the whole array, so the tags are read fresh first. A retry repeats the read and the
+      // change on the same page and creates nothing.
+      const fresh = await http.request('GET', `/v1/pages/${idea.id}`);
+      const tagProp = isObj(fresh) && isObj(fresh.properties) && isObj(fresh.properties.Tags) ? fresh.properties.Tags : null;
+      const names = tagProp && Array.isArray(tagProp.multi_select) ? tagProp.multi_select.map((t) => (isObj(t) && typeof t.name === 'string' ? t.name : '')).filter((n) => n !== '') : [];
+      const kept = names.filter((n) => n.trim().toLowerCase() !== 'idea').map((name) => ({ name }));
 
       at('adding it to the project');
-      // A Card is never adopted by title. The store remembers ideaId -> cardId for each Card this adapter made; a retried
-      // post finds its first Card only through that map (after a restart the map is empty and a retry makes a new Card).
-      store.filed ??= new Map();
-      const mapped = store.filed.get(idea.id);
-      const card = mapped !== undefined ? store.rows.cards.get(mapped) ?? null : null;
-      if (card === null) {
-        const props = { title: text(idea.title), Project: relation([project.id]) };
-        if (goal !== null) props.Goal = relation([goal.id]);
-        const made = await create('cards', props);
-        if (made !== null) store.filed.set(idea.id, made.id);
-      } else {
-        // a retried post: the Card takes the retry's Project and Goal (or none) when they differ
-        const same = (ids, want) => ids.length === want.length && want.every((w) => ids.includes(w));
-        const props = {};
-        if (!same(card.projectIds ?? [], [project.id])) props.Project = relation([project.id]);
-        const wantGoal = goal !== null ? [goal.id] : [];
-        if (!same(card.goalIds ?? [], wantGoal)) props.Goal = relation(wantGoal);
-        if (Object.keys(props).length > 0) await patch('cards', card.id, props);
-      }
-      at('marking the idea filed');
-      await patch('ideas', idea.id, { Filed: { checkbox: true } });
+      await patch('tasks', idea.id, {
+        Project: relation([project.id]),
+        Goal: relation(goal !== null ? [goal.id] : []),
+        Tags: { multi_select: kept },
+      });
       return EMPTY();
     }),
 
     closeCard: guard(async ({ card, number }) => {
       const n = isObj(card) && card.number !== undefined ? card.number : number;
-      const row = rowByNumber('cards', n);
-      const name = store.schema.cards.completeFirst;
+      const row = rowByNumber('tasks', n);
+      const name = store.schema.tasks.completeFirst;
       if (typeof name !== 'string' || name === '') throw new BackendError('invalid', null, NO_COMPLETE);
-      await patch('cards', row.id, { Status: { status: { name } } });
+      await patch('tasks', row.id, { Status: { status: { name } } });
       return EMPTY();
     }),
 

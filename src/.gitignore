@@ -4,3 +4,6 @@ node_modules/
 .env*
 setup-undo*.json
 proposal*.json
+config/
+.howgozit-notion.json
+.howgozit-notion-rows.json

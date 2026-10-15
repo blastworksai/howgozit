@@ -27,8 +27,9 @@ The page works on a phone as well as a desktop screen.
 
 ## How it works
 
-- GitHub holds everything: your projects, milestones, tasks, ideas and habit check-ins, all in one private repository.
+- On the GitHub road, GitHub holds everything: your projects, milestones, tasks, ideas and habit check-ins, all in one private repository.
 - A small server, with no add-ons to install, reads that repository and draws the page.
+- On the Notion road, four tables in your own Notion workspace hold the same things, and your settings stay in a folder on your computer.
 - The server only reads. When you use the page it makes four small writes: log an idea, tick a habit, sort an idea and close a task.
 - Optional agents can write extra files into the repository. They feed the brief, calendar, inbox and agent log panels.
 - Without an agent, those panels do not appear. Everything else still works.
@@ -36,6 +37,10 @@ The page works on a phone as well as a desktop screen.
 ## What you need
 
 - Node 22 or newer.
+- Either a GitHub account and a GitHub token (first list below), or a Notion account and a Notion token (second list).
+
+For GitHub:
+
 - A GitHub account.
 - A GitHub token.
   On an organisation, use a fine-grained token with Issues (read and write) and Contents (read and write) on the repository, plus Projects (read and write) on the organisation.
@@ -44,11 +49,17 @@ The page works on a phone as well as a desktop screen.
   Contents write is used only by setup and undo.
   With `BOARD_READ_ONLY=1` the board writes nothing.
 
+For Notion:
+
+- A Notion account, and a personal access token (or an internal connection's token) that can create pages and databases.
+- No GitHub repository and no GitHub token. A Notion board ignores `BOARD_REPO` and the GitHub tokens.
+- How to make the token, run setup and start the board is in `references/notion-setup.md`.
+
 ## Getting it
 
 The easy way is to let an agent do it.
 Tell your agent to read `SKILL.md` and follow it.
-It interviews you, writes a proposal of projects and milestones, asks for your approval once, and then sets everything up.
+It interviews you, writes a proposal of projects and milestones, asks for your approval once, and then sets everything up, on GitHub or on Notion.
 
 If you would rather do it by hand, fill in a proposal as described in `references/setup-proposal.md`, then run these three commands:
 
@@ -65,7 +76,19 @@ Then start the board:
 node board/server.mjs
 ```
 
-The board reads its settings from environment variables: `BOARD_GITHUB_TOKEN` (the token), `BOARD_REPO` (the data repository as `owner/name`), `BOARD_MODE`, and a few more listed in `references/contract.md`.
+On Notion, follow `references/notion-setup.md` instead.
+In short: make a token, write the same kind of proposal (without `owner` and `repo`), then run these from this folder with `BOARD_NOTION_TOKEN` set:
+
+```
+node scripts/notion-setup.mjs plan <file>
+node scripts/notion-setup.mjs apply <file>
+```
+
+`plan` shows what would be created and writes nothing.
+`apply` creates the Notion tables and rows and a starter `board.config.json` (in `./config` unless you give `--config-dir`), then prints the environment lines to set.
+Start the board with `BOARD_BACKEND=notion`, `BOARD_NOTION_TOKEN`, `BOARD_CONFIG_DIR` and `BOARD_FORM_KEY` set, and `node board/server.mjs`.
+
+For GitHub, the board reads its settings from environment variables: `BOARD_GITHUB_TOKEN` (the token), `BOARD_REPO` (the data repository as `owner/name`), `BOARD_MODE`, and a few more listed in `references/contract.md`.
 
 ## Three ways to run it
 
@@ -106,9 +129,12 @@ Issues are closed rather than deleted.
 - `references/calendar-icloud.md`: how to show today's events from your own iCloud calendars.
 - `references/calendar-google.md`: how to show today's events from your own Google calendars.
 - `references/github-notes.md`: notes on how the board uses GitHub.
+- `references/notion-setup.md`: keeping your board in Notion instead of GitHub.
 
 ## Status
 
+The Notion road was proven live on 15 Oct 2026: a real board was copied into a real Notion workspace, and a Notion board read it and ran the five actions (log an idea, file it, tick a habit, score, close a card).
+The Notion setup script's `plan` and `apply` road was proven live on 15 Oct 2026 with a personal access token.
 The test suite passes on Linux (Node 22), macOS (Node 26) and Windows (Node 26).
 The board itself was started and used on Linux only; the local guide was followed there step by step in bash.
 The macOS and Windows commands, the token stores and the start-at-login steps are written from documentation and were not run.

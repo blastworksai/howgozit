@@ -72,7 +72,7 @@ It works on your phone as well as on a big screen.
 
 | Choice | Options |
 |---|---|
-| **Where your data lives** | GitHub (the default), or Notion (built and tested against a stand-in Notion; real-workspace testing is in progress) |
+| **Where your data lives** | GitHub (the default), or Notion, set up with [`src/references/notion-setup.md`](src/references/notion-setup.md) |
 | **Where the board runs** | Your own computer, your own web hosting, or behind your own login proxy. Reach it privately from your phone over Tailscale |
 | **How you set it up** | Let an agent do it: it interviews you, proposes your projects and goals, asks for one yes and builds everything. Or do it by hand with three commands |
 | **Which agent** | Any agent that can read a file and run a command. It works best with **[Glitch](https://glitchcatclub.com)** |
@@ -100,7 +100,11 @@ It asks you a few questions, shows you the plan, and builds it on your yes.
 
 **By hand.**
 Read [`src/README.md`](src/README.md).
-It lists what you need (Node 22, a GitHub account, a token), the three setup commands, and how to start the board.
+It lists what you need (Node 22, and either a GitHub account and token or a Notion account and token), the setup commands, and how to start the board.
+
+**On Notion.**
+Follow [`src/references/notion-setup.md`](src/references/notion-setup.md).
+It covers the token, a plan-then-apply setup from a proposal, the settings, and what you should see when the board starts.
 
 ## Safe by design, and honest about it
 

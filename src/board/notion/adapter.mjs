@@ -1,4 +1,5 @@
-// The Notion adapter: the five data sources behind the back-end-neutral interface (cp9-interface §4; contract R142, R143).
+// The Notion adapter: the four data sources (Projects, Tasks, Goals, Habit log) behind the back-end-neutral interface (cp9-interface §4; contract R142, R143).
+// R155: a settings file with no `projects` list is handed on with the open Projects rows as that list, so the model never knows (R150).
 // The seven config files come from the settings folder (BOARD_CONFIG_DIR), as the GitHub adapter's configHttp serves them.
 import path from 'node:path';
 import { assertAdapter } from '../model/adapter.mjs';
@@ -52,8 +53,11 @@ export function createNotionAdapter({ http, configDir, readFile }) {
       return { raw, texts, warnings: [] };
     }
     settings = parsed;
-    const { raw, warnings } = await readNotion(http, store, { settings: parsed, full: full === true, now });
-    return { raw, texts, warnings };
+    const got1 = await readNotion(http, store, { settings: parsed, full: full === true, now });
+    // R155: the filled settings are what the writer and the loader see; the file on disk is never written.
+    settings = got1.settings;
+    if (got1.settings !== parsed) texts.settings = JSON.stringify(got1.settings);
+    return { raw: got1.raw, texts, warnings: got1.warnings };
   }
 
   return assertAdapter({ kind: 'notion', read, ...verbs });

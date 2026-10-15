@@ -13,6 +13,11 @@
 //   fake.addPage(CARDS, { Name: 'Paint the hallway', Status: 'In progress' }, { id, created, edited })
 //   fake.trash(pageId)  // as PATCH in_trash:true, without a call being logged
 //   fake.fail(match, errorOrStatus)   // additive: the next matching request throws the Error or answers that status
+//
+// Notion-native additions (reference/notion-native/interface.md §5): multi_select, people and rollup properties,
+// multi_select / relation / `or` filters, POST /v1/databases, PATCH /v1/data_sources/<id>, plain pages under a page or the
+// workspace, GET /v1/blocks/<id>/children, GET /v1/databases/<id>, POST /v1/search, two-way relations kept in sync,
+// and createFakeNotion({ tokenKind: 'internal' | 'personal' }). Fixtures/notion-howgozit.mjs builds the four-table schema on top.
 
 const HOST = 'https://api.notion.com';
 const VERSION = '2026-03-11';
@@ -20,7 +25,10 @@ const RELATION_CUT = 25;
 const MAX_PAGE_SIZE = 100;
 const MINUTE = 60 * 1000;
 const COLOURS = ['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
-const TYPES = ['title', 'status', 'select', 'date', 'number', 'checkbox', 'relation', 'unique_id'];
+// Notion's rollup functions (property object, rollup).
+const ROLLUP_FUNCTIONS = ['count', 'count_values', 'empty', 'not_empty', 'unique', 'show_unique', 'percent_empty', 'percent_not_empty', 'sum', 'average', 'median', 'min', 'max', 'range', 'earliest_date', 'latest_date', 'date_range', 'checked', 'unchecked', 'percent_checked', 'percent_unchecked', 'count_per_group', 'percent_per_group', 'show_original'];
+const TYPES = ['title', 'status', 'select', 'multi_select', 'people', 'rollup', 'date', 'number', 'checkbox', 'relation', 'unique_id'];
+const OPTION_TYPES = ['select', 'multi_select', 'status'];
 
 class ApiError extends Error {
   constructor(status, code, message) {
@@ -59,9 +67,10 @@ function pageSizeOf(raw) {
   return raw;
 }
 
-export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } = {}) {
+export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {}, tokenKind = 'personal' } = {}) {
+  if (tokenKind !== 'internal' && tokenKind !== 'personal') throw new Error('fake-notion: tokenKind is internal or personal');
   const calls = [];
-  const state = { tick: 0, dataSources: {} };
+  const state = { tick: 0, dataSources: {}, pages: [], databases: {} };
   let clock = Date.UTC(2026, 9, 1);
   let seq = 0;
   let limited = null;
@@ -91,32 +100,66 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
 
   // ---- the schema ----
   const dsByKey = new Map();
+  let propSeq = 0;
+  const newPropId = () => {
+    propSeq += 1;
+    return 'np' + propSeq;
+  };
+
+  // A route definition ({ select: { options } }) or a test definition ({ type: 'select', options }) becomes { type, ...fields }.
+  function flatten(name, def) {
+    if (!def || typeof def !== 'object' || Array.isArray(def)) throw invalid('Property "' + name + '" is not a valid definition.');
+    if (typeof def.type === 'string') return copy(def);
+    const k = TYPES.find((t) => def[t] !== undefined);
+    if (!k) throw invalid('Property "' + name + '" has no type.');
+    const inner = def[k] && typeof def[k] === 'object' ? copy(def[k]) : {};
+    const out = { type: k };
+    if (k === 'relation') {
+      out.data_source_id = inner.data_source_id;
+      out.dual = inner.type === 'dual_property';
+    } else Object.assign(out, inner);
+    if (def.id) out.id = def.id;
+    return out;
+  }
+
+  const DEFAULT_STATUS = {
+    options: [{ name: 'Not started', color: 'gray' }, { name: 'In progress', color: 'blue' }, { name: 'Done', color: 'green' }],
+    groups: [{ name: 'To-do', option_ids: ['Not started'] }, { name: 'In progress', option_ids: ['In progress'] }, { name: 'Complete', option_ids: ['Done'] }],
+  };
+
+  // fresh: a property made through a route; a status with no options then gets Notion's defaults.
+  function makeProp(name, cfg, id, fresh = false) {
+    if (!cfg || !TYPES.includes(cfg.type)) throw new Error('fake-notion: unknown property type for ' + name);
+    const p = copy(cfg);
+    p.name = name;
+    p.id = id;
+    if (fresh && p.type === 'status' && !(p.options && p.options.length)) Object.assign(p, copy(DEFAULT_STATUS));
+    if (OPTION_TYPES.includes(p.type)) {
+      p.options = (p.options || []).map((o) => ({ id: o.id || newOptionId(), name: o.name, color: o.color || 'default' }));
+      for (const o of p.options) if (!COLOURS.includes(o.color)) throw new Error('fake-notion: unknown colour ' + o.color);
+    }
+    if (p.type === 'status') {
+      const names = ['To-do', 'In progress', 'Complete'];
+      p.groups = (p.groups && p.groups.length ? p.groups : names.map((g) => ({ name: g, option_ids: [] }))).map((g, i) => ({
+        id: g.id || 'grp' + (i + 1),
+        name: g.name,
+        // an option may be named in a group by its name as well as by its id
+        option_ids: (g.option_ids || []).map((x) => {
+          const hit = p.options.find((o) => o.id === x) || p.options.find((o) => o.name === x);
+          return hit ? hit.id : x;
+        }),
+      }));
+    }
+    return p;
+  }
+
   for (const [key, def] of Object.entries(dataSources)) {
     const props = {};
     let n = 0;
     for (const [name, cfg] of Object.entries((def && def.properties) || {})) {
       if (!cfg || !TYPES.includes(cfg.type)) throw new Error('fake-notion: unknown property type for ' + name);
       n += 1;
-      const p = copy(cfg);
-      p.name = name;
-      p.id = cfg.id || (cfg.type === 'title' ? 'title' : 'pr' + n);
-      if (p.type === 'select' || p.type === 'status') {
-        p.options = (p.options || []).map((o) => ({ id: o.id || newOptionId(), name: o.name, color: o.color || 'default' }));
-        for (const o of p.options) if (!COLOURS.includes(o.color)) throw new Error('fake-notion: unknown colour ' + o.color);
-      }
-      if (p.type === 'status') {
-        const names = ['To-do', 'In progress', 'Complete'];
-        p.groups = (p.groups && p.groups.length ? p.groups : names.map((g) => ({ name: g, option_ids: [] }))).map((g, i) => ({
-          id: g.id || 'grp' + (i + 1),
-          name: g.name,
-          // an option may be named in a group by its name as well as by its id
-          option_ids: (g.option_ids || []).map((x) => {
-            const hit = p.options.find((o) => o.id === x) || p.options.find((o) => o.name === x);
-            return hit ? hit.id : x;
-          }),
-        }));
-      }
-      props[name] = p;
+      props[name] = makeProp(name, cfg, cfg.id || (cfg.type === 'title' ? 'title' : 'pr' + n));
     }
     if (!Object.values(props).some((p) => p.type === 'title')) props.Name = { id: 'title', name: 'Name', type: 'title' };
     const id = canon(key);
@@ -144,6 +187,11 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     return hit;
   };
 
+  const twinOf = (p) => {
+    const tds = p.twin && dsByKey.get(p.twin.ds);
+    return tds ? Object.values(tds.properties).find((x) => x.id === p.twin.id) : undefined;
+  };
+
   const schemaOf = (ds) => {
     const properties = {};
     for (const p of Object.values(ds.properties)) {
@@ -153,9 +201,26 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
       else if (p.type === 'date') out.date = {};
       else if (p.type === 'number') out.number = { format: p.format || 'number' };
       else if (p.type === 'select') out.select = { options: copy(p.options) };
-      else if (p.type === 'status') out.status = { options: copy(p.options), groups: copy(p.groups) };
+      else if (p.type === 'multi_select') out.multi_select = { options: copy(p.options) };
+      else if (p.type === 'people') out.people = {};
+      else if (p.type === 'rollup') {
+        const rel = p.relation_property_id && Object.values(ds.properties).find((x) => x.id === p.relation_property_id);
+        const tds = rel && dsByKey.get(canon(rel.data_source_id));
+        const tgt = tds && Object.values(tds.properties).find((x) => x.id === p.rollup_property_id);
+        out.rollup = {
+          relation_property_name: rel ? rel.name : p.relation_property_name ?? null, relation_property_id: p.relation_property_id ?? null,
+          rollup_property_name: tgt ? tgt.name : p.rollup_property_name ?? null, rollup_property_id: p.rollup_property_id ?? null,
+          function: p.function || 'percent_per_group',
+        };
+      } else if (p.type === 'status') out.status = { options: copy(p.options), groups: copy(p.groups) };
       else if (p.type === 'relation') {
-        out.relation = { database_id: 'db-' + canon(p.data_source_id), data_source_id: canon(p.data_source_id), type: 'single_property', single_property: {} };
+        const target = dsByKey.get(canon(p.data_source_id));
+        out.relation = { database_id: (target && target.databaseId) || 'db-' + canon(p.data_source_id), data_source_id: canon(p.data_source_id) };
+        if (p.dual) {
+          const tw = twinOf(p);
+          out.relation.type = 'dual_property';
+          out.relation.dual_property = { synced_property_id: tw ? tw.id : null, synced_property_name: tw ? tw.name : null };
+        } else Object.assign(out.relation, { type: 'single_property', single_property: {} });
       } else if (p.type === 'unique_id') out.unique_id = { prefix: p.prefix || null };
       properties[p.name] = out;
     }
@@ -170,7 +235,7 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     const inner = v !== null && typeof v === 'object' && !Array.isArray(v) && p.type in v ? v[p.type] : v;
     switch (p.type) {
       case 'title': {
-        if (typeof inner === 'string') return inner;
+        if (typeof inner === 'string' && internal) return inner; // only the seeding helper (addPage) may pass bare text
         if (Array.isArray(inner) && inner.every((t) => t && ((t.text && typeof t.text.content === 'string') || typeof t.plain_text === 'string'))) {
           return inner.map((t) => (t.text ? t.text.content : t.plain_text)).join('');
         }
@@ -200,6 +265,42 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
         }
         return o.id;
       }
+      case 'multi_select': {
+        if (inner === null && internal) return [];
+        if (!Array.isArray(inner)) throw invalid('multi_select is expected to be an array of options.');
+        if (inner.length > 100) throw invalid('multi_select can hold at most 100 options per request.');
+        const ids = [];
+        for (const e of inner) {
+          if (typeof e === 'string' && internal) { /* bare name: seeding helper only */ } else if (!e || typeof e !== 'object' || Array.isArray(e) || (typeof e.name !== 'string' && typeof e.id !== 'string')) {
+            throw invalid('multi_select entries are expected to be { name } or { id }.');
+          }
+          if (e && typeof e === 'object' && typeof e.name !== 'string') {
+            const byId = p.options.find((x) => x.id === e.id);
+            if (!byId) throw invalid('multi_select option id "' + e.id + '" does not exist.');
+            if (!ids.includes(byId.id)) ids.push(byId.id);
+            continue;
+          }
+          const name = typeof e === 'string' ? e : e.name;
+          if (!name || name.includes(',')) throw invalid('multi_select names are expected to be names without commas.');
+          let o = optionByName(p, name);
+          if (!o) {
+            o = { id: newOptionId(), name, color: 'default' };
+            p.options.push(o);
+          }
+          if (!ids.includes(o.id)) ids.push(o.id);
+        }
+        return ids;
+      }
+      case 'people': {
+        if (!Array.isArray(inner)) throw invalid('people is expected to be an array.');
+        return inner.map((u) => {
+          const id = typeof u === 'string' ? u : u && u.id;
+          if (typeof id !== 'string' || !id) throw invalid('people entries are expected to be { id }.');
+          return { object: 'user', id };
+        });
+      }
+      case 'rollup':
+        throw invalid('A rollup cannot be set through the API.');
       case 'status': {
         if (inner === null) return null;
         const name = typeof inner === 'string' ? inner : inner && inner.name;
@@ -210,10 +311,14 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
       case 'relation': {
         if (!Array.isArray(inner)) throw invalid('relation is expected to be an array.');
         if (inner.length > 100) throw invalid('relation can hold at most 100 pages per request.');
+        const target = dsByKey.get(canon(p.data_source_id));
         return inner.map((r) => {
+          if (typeof r === 'string' && !internal) throw invalid('relation entries are expected to be { id }.');
           const id = typeof r === 'string' ? r : r && r.id;
           if (typeof id !== 'string' || !id) throw invalid('relation entries are expected to be { id }.');
-          return canon(id);
+          const c = canon(id);
+          if (!internal && !(target && target.pages.some((x) => x.id === c))) throw invalid('relation page "' + id + '" is not a page of the related data source.');
+          return c;
         });
       }
       case 'unique_id': {
@@ -230,7 +335,7 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
   const defaultRaw = (p) => {
     if (p.type === 'title') return '';
     if (p.type === 'checkbox') return false;
-    if (p.type === 'relation') return [];
+    if (p.type === 'relation' || p.type === 'multi_select' || p.type === 'people') return [];
     if (p.type === 'status') {
       // a new row starts at the first option of the To-do group, as Notion does
       const first = p.groups[0] && p.groups[0].option_ids[0];
@@ -245,7 +350,10 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     else if (p.type === 'select' || p.type === 'status') {
       const o = raw === null ? null : p.options.find((x) => x.id === raw);
       out[p.type] = o ? { id: o.id, name: o.name, color: o.color } : null;
-    } else if (p.type === 'date') out.date = raw === null ? null : copy(raw);
+    } else if (p.type === 'multi_select') out.multi_select = raw.map((id) => p.options.find((x) => x.id === id)).filter(Boolean).map((o) => ({ id: o.id, name: o.name, color: o.color }));
+    else if (p.type === 'people') out.people = copy(raw);
+    else if (p.type === 'rollup') out.rollup = { type: 'number', number: null, function: p.function || 'percent_per_group' };
+    else if (p.type === 'date') out.date = raw === null ? null : copy(raw);
     else if (p.type === 'relation') {
       out.relation = raw.slice(0, RELATION_CUT).map((id) => ({ id }));
       out.has_more = raw.length > RELATION_CUT;
@@ -298,7 +406,28 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     seen(page.created);
     seen(page.edited);
     ds.pages.push(page);
+    syncRelations(ds, page, {});
     return page;
+  }
+
+  // A two-way relation lists the page on both sides: after a write, the twin property of every page that was added or removed follows.
+  function syncRelations(ds, page, before) {
+    for (const p of Object.values(ds.properties)) {
+      if (p.type !== 'relation' || !p.twin) continue;
+      const old = before[p.name] || [];
+      const now = page.values[p.name] || [];
+      const tds = dsByKey.get(p.twin.ds);
+      const tp = twinOf(p);
+      if (!tds || !tp) continue;
+      const touch = (id, change) => {
+        const target = tds.pages.find((x) => x.id === id);
+        if (!target) return;
+        target.values[tp.name] = change(target.values[tp.name] || []);
+        target.edited = stamp();
+      };
+      for (const id of old.filter((x) => !now.includes(x))) touch(id, (arr) => arr.filter((x) => x !== page.id));
+      for (const id of now.filter((x) => !old.includes(x))) touch(id, (arr) => (arr.includes(page.id) ? arr : [...arr, page.id]));
+    }
   }
   function findPageSafe(id) {
     for (const ds of dsByKey.values()) if (ds.pages.some((p) => p.id === id)) return true;
@@ -319,11 +448,26 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     return ms;
   };
 
-  function matches(ds, page, filter) {
+  // Depth is checked on the filter alone, before any page is looked at, so a source with no live pages refuses a too-deep filter too.
+  function checkDepth(filter, depth = 1) {
+    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) return;
+    for (const k of ['and', 'or']) {
+      if (filter[k] === undefined) continue;
+      if (depth > 2) throw invalid('Compound filters can be nested two levels deep at most.');
+      if (Array.isArray(filter[k])) filter[k].forEach((f) => checkDepth(f, depth + 1));
+    }
+  }
+
+  function matches(ds, page, filter, depth = 1) {
     if (!filter || typeof filter !== 'object' || Array.isArray(filter)) throw invalid('filter is expected to be an object.');
+    if ((filter.and !== undefined || filter.or !== undefined) && depth > 2) throw invalid('Compound filters can be nested two levels deep at most.');
     if (filter.and !== undefined) {
       if (!Array.isArray(filter.and) || !filter.and.length) throw invalid('and is expected to be a non-empty array.');
-      return filter.and.map((f) => matches(ds, page, f)).every(Boolean); // every branch is validated, none short-circuits past a bad one
+      return filter.and.map((f) => matches(ds, page, f, depth + 1)).every(Boolean); // every branch is validated, none short-circuits past a bad one
+    }
+    if (filter.or !== undefined) {
+      if (!Array.isArray(filter.or) || !filter.or.length) throw invalid('or is expected to be a non-empty array.');
+      return filter.or.map((f) => matches(ds, page, f, depth + 1)).some(Boolean);
     }
     if (filter.timestamp !== undefined) {
       if (filter.property !== undefined) throw invalid('A timestamp filter takes no property.');
@@ -339,6 +483,32 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
         const raw = page.values[p.name] === undefined ? defaultRaw(p) : page.values[p.name];
         const hit = dateCondition(cond, raw ? Date.parse(raw.start) : null);
         return hit;
+      }
+      if (p.type === 'title' || p.type === 'rich_text') {
+        if (!cond || typeof cond !== 'object' || Array.isArray(cond)) throw invalid(p.type + ' condition expected.');
+        const raw = page.values[p.name] === undefined ? defaultRaw(p) : page.values[p.name];
+        const text = typeof raw === 'string' ? raw : '';
+        if (typeof cond.equals === 'string') return text === cond.equals;
+        if (typeof cond.contains === 'string') return text.includes(cond.contains);
+        if (cond.is_empty === true) return text === '';
+        if (cond.is_not_empty === true) return text !== '';
+        throw invalid('Unknown ' + p.type + ' condition.');
+      }
+      if (p.type === 'multi_select') {
+        if (!cond || typeof cond !== 'object') throw invalid('multi_select condition expected.');
+        const raw = page.values[p.name] === undefined ? defaultRaw(p) : page.values[p.name];
+        const names = raw.map((id) => (p.options.find((o) => o.id === id) || {}).name);
+        if (typeof cond.contains === 'string') return names.includes(cond.contains);
+        if (typeof cond.does_not_contain === 'string') return !names.includes(cond.does_not_contain);
+        throw invalid('Unknown multi_select condition.');
+      }
+      if (p.type === 'relation') {
+        if (!cond || typeof cond !== 'object') throw invalid('relation condition expected.');
+        const raw = page.values[p.name] === undefined ? defaultRaw(p) : page.values[p.name];
+        if (cond.is_empty === true) return raw.length === 0;
+        if (cond.is_not_empty === true) return raw.length > 0;
+        if (typeof cond.contains === 'string') return raw.includes(canon(cond.contains));
+        throw invalid('Unknown relation condition.');
       }
       if (p.type === 'checkbox') {
         if (!cond || typeof cond !== 'object') throw invalid('checkbox condition expected.');
@@ -358,6 +528,223 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
     return at !== null && Number.isFinite(at) && DATE_CONDITIONS[keys[0]](at, against);
   }
 
+  // ---- schema routes: databases, data sources, plain pages, search ----
+  const plainPage = (id) => state.pages.find((x) => x.id === canon(id));
+  function knownPage(id) {
+    if (plainPage(id)) return true;
+    try { findPage(id); return true; } catch { return false; }
+  }
+
+  // Runs a schema change and puts every data source back as it was if it throws.
+  function atomically(fn) {
+    const snap = copy(state.dataSources);
+    const dbSnap = copy(state.databases);
+    try {
+      return fn();
+    } catch (err) {
+      for (const id of Object.keys(state.dataSources)) {
+        if (snap[id]) Object.assign(state.dataSources[id], snap[id]);
+        else { delete state.dataSources[id]; dsByKey.delete(id); }
+      }
+      state.databases = dbSnap;
+      throw err;
+    }
+  }
+
+  const textOf = (v, what) => {
+    if (Array.isArray(v) && v.every((t) => t && ((t.text && typeof t.text.content === 'string') || typeof t.plain_text === 'string'))) {
+      return v.map((t) => (t.text ? t.text.content : t.plain_text)).join('');
+    }
+    throw invalid(what + ' is expected to be an array of rich text.');
+  };
+  const richText = (text) => (text === '' ? [] : [{ type: 'text', text: { content: text, link: null }, plain_text: text }]);
+
+  const uniqueName = (ds, name) => {
+    let out = name;
+    for (let i = 2; Object.values(ds.properties).some((p) => p.name === out); i += 1) out = name + ' ' + i;
+    return out;
+  };
+
+  // names unique case-insensitively, no commas (notion-api §4)
+  function checkOptionNames(options) {
+    const seen = new Set();
+    for (const o of options) {
+      if (typeof o.name !== 'string' || !o.name) throw invalid('An option needs a name.');
+      if (o.name.includes(',')) throw invalid('Option names cannot contain commas.');
+      const k = o.name.toLowerCase();
+      if (seen.has(k)) throw invalid('Option "' + o.name + '" is a duplicate (names are unique case-insensitively).');
+      seen.add(k);
+    }
+  }
+
+  // A rollup names a relation on this data source and a property on the related one, by name or id, and a function.
+  function resolveRollup(ds, flat) {
+    const find = (d, name, id) => Object.values(d.properties).find((x) => (typeof id === 'string' && id ? x.id === id : x.name === name));
+    const rel = find(ds, flat.relation_property_name, flat.relation_property_id);
+    if (!rel || rel.type !== 'relation') throw invalid('rollup.relation_property_name must name a relation property of this data source.');
+    const tds = dsByKey.get(canon(rel.data_source_id));
+    const target = tds && find(tds, flat.rollup_property_name, flat.rollup_property_id);
+    if (!target) throw invalid('rollup.rollup_property_name must name a property of the related data source.');
+    if (typeof flat.function !== 'string' || !flat.function) throw invalid('rollup.function is required.');
+    if (!ROLLUP_FUNCTIONS.includes(flat.function)) throw invalid('rollup.function is not a supported rollup function.');
+    return {
+      type: 'rollup', relation_property_id: rel.id, relation_property_name: rel.name,
+      rollup_property_id: target.id, rollup_property_name: target.name, function: flat.function,
+    };
+  }
+
+  function addProperty(ds, name, def) {
+    if (typeof name !== 'string' || !name) throw invalid('A property needs a name.');
+    if (Object.values(ds.properties).some((x) => x.name === name)) throw invalid('Property "' + name + '" already exists.');
+    const flat = flatten(name, def);
+    if (!TYPES.includes(flat.type)) throw invalid('Unsupported property type "' + flat.type + '".');
+    if (flat.type === 'title' && Object.values(ds.properties).some((x) => x.type === 'title')) throw invalid('A data source has exactly one title property.');
+    if (OPTION_TYPES.includes(flat.type) && flat.options !== undefined) {
+      if (!Array.isArray(flat.options)) throw invalid('options is expected to be an array.');
+      checkOptionNames(flat.options);
+    }
+    const resolved = flat.type === 'rollup' ? resolveRollup(ds, flat) : null;
+    const p = makeProp(name, resolved || flat, flat.id || (flat.type === 'title' ? 'title' : newPropId()), true);
+    let target;
+    if (p.type === 'relation') {
+      // Notion needs a real data source id; a self relation is made by PATCH once the id exists
+      if (typeof p.data_source_id !== 'string' || !p.data_source_id) throw invalid('relation.data_source_id is required.');
+      target = canon(p.data_source_id) === ds.id ? ds : dsByKey.get(canon(p.data_source_id));
+      if (!target) throw invalid('relation.data_source_id "' + p.data_source_id + '" is not a data source this connection can see.');
+      p.data_source_id = target.id;
+    }
+    ds.properties[name] = p;
+    if (p.type === 'relation' && p.dual) {
+      const twin = {
+        id: newPropId(), name: uniqueName(target, 'Related to ' + (ds.dbTitle || ds.id) + ' (' + name + ')'), type: 'relation',
+        data_source_id: ds.id, dual: true, twin: { ds: ds.id, id: p.id },
+      };
+      p.twin = { ds: target.id, id: twin.id };
+      target.properties[twin.name] = twin;
+    }
+    return p;
+  }
+
+  function removeProperty(ds, p) {
+    if (p.type === 'title') throw invalid('The title property cannot be removed.');
+    const gone = [[ds, p]];
+    const tw = p.type === 'relation' ? twinOf(p) : undefined;
+    if (tw) gone.push([dsByKey.get(p.twin.ds), tw]);
+    for (const [d, q] of gone) {
+      delete d.properties[q.name];
+      for (const pg of d.pages) delete pg.values[q.name];
+    }
+  }
+
+  function renameProperty(ds, p, name) {
+    if (typeof name !== 'string' || !name) throw invalid('A property needs a name.');
+    if (name === p.name) return;
+    if (Object.values(ds.properties).some((x) => x.name === name)) throw invalid('Property "' + name + '" already exists.');
+    const old = p.name;
+    ds.properties = Object.fromEntries(Object.entries(ds.properties).map(([k, v]) => (k === old ? [name, v] : [k, v])));
+    p.name = name;
+    for (const pg of ds.pages) if (old in pg.values) { pg.values[name] = pg.values[old]; delete pg.values[old]; }
+  }
+
+  function patchSchema(ds, props) {
+    if (!props || typeof props !== 'object' || Array.isArray(props)) throw invalid('properties is expected to be an object.');
+    for (const [key, def] of Object.entries(props)) {
+      const hit = Object.values(ds.properties).find((x) => x.id === key || x.name === key);
+      if (def === null) {
+        if (!hit) throw invalid('Property "' + key + '" does not exist.');
+        removeProperty(ds, hit);
+      } else if (!hit) addProperty(ds, key, def);
+      else {
+        if (!def || typeof def !== 'object' || Array.isArray(def)) throw invalid('Property "' + key + '" is not a valid definition.');
+        if (typeof def.name === 'string') renameProperty(ds, hit, def.name);
+        const flat = Object.keys(def).some((k) => TYPES.includes(k)) ? flatten(hit.name, def) : null;
+        if (!flat) continue;
+        if (flat.type !== hit.type) throw invalid('Property "' + hit.name + '" cannot change type.');
+        if (OPTION_TYPES.includes(hit.type) && flat.options) {
+          // set options: the given list replaces the old one; a name that was there keeps its id
+          // an option is found by id, else by case-insensitive name, and keeps its identity either way
+          if (!Array.isArray(flat.options)) throw invalid('options is expected to be an array.');
+          const next = flat.options.map((o) => {
+            if (!o || typeof o !== 'object') throw invalid('options are expected to be objects.');
+            const was = (typeof o.id === 'string' && hit.options.find((x) => x.id === o.id))
+              || (typeof o.name === 'string' && hit.options.find((x) => x.name.toLowerCase() === o.name.toLowerCase()));
+            const name = typeof o.name === 'string' ? o.name : was && was.name;
+            const color = o.color || (was && was.color) || 'default';
+            if (!COLOURS.includes(color)) throw invalid('Unknown colour ' + color + '.');
+            return { id: (was && was.id) || (typeof o.id === 'string' && o.id) || newOptionId(), name, color };
+          });
+          checkOptionNames(next);
+          hit.options = next;
+        }
+        if (hit.type === 'rollup') Object.assign(hit, resolveRollup(ds, flat), { id: hit.id, name: hit.name });
+      }
+    }
+  }
+
+  const databaseOut = (db) => ({
+    object: 'database', id: db.id, title: richText(db.title), data_sources: db.data_sources.map((id) => ({ id, name: state.dataSources[id].dbTitle })),
+    parent: copy(db.parent),
+  });
+
+  function createDatabase(b) {
+    const parent = b.parent;
+    if (!parent || typeof parent.page_id !== 'string') throw invalid('parent.page_id is required.');
+    if (!knownPage(parent.page_id)) throw notFound('that parent page');
+    const title = textOf(b.title === undefined ? [] : b.title, 'title');
+    const raw = b.initial_data_source && b.initial_data_source.properties;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw invalid('initial_data_source.properties is expected to be an object.');
+    seq += 1;
+    const dbId = `00000000-0000-4000-8000-${seq.toString(16).padStart(12, '0')}`;
+    seq += 1;
+    const dsId = `00000000-0000-4000-8000-${seq.toString(16).padStart(12, '0')}`;
+    return atomically(() => {
+      const ds = { id: dsId, properties: {}, pages: [], counters: {}, dbTitle: title, databaseId: dbId };
+      state.dataSources[dsId] = ds;
+      dsByKey.set(dsId, ds);
+      const entries = Object.entries(raw);
+      // relations last: a self relation and its twin need the rest of the schema to exist
+      const isRel = ([, d]) => d && d.relation;
+      const isRoll = ([, d]) => d && d.rollup;
+      for (const [name, def] of [...entries.filter((e) => !isRel(e) && !isRoll(e)), ...entries.filter(isRel), ...entries.filter(isRoll)]) addProperty(ds, name, def);
+      if (!Object.values(ds.properties).some((p) => p.type === 'title')) throw invalid('A data source needs a title property.');
+      const db = { id: dbId, title, parent: { type: 'page_id', page_id: canon(parent.page_id) }, data_sources: [dsId], icon: b.icon ?? null, is_inline: Boolean(b.is_inline) };
+      state.databases[dbId] = db;
+      return databaseOut(db);
+    });
+  }
+
+  function createPlainPage(b, parent) {
+    if (parent.workspace && tokenKind === 'internal') throw invalid('Cannot create a page at the workspace level with an internal connection.');
+    const t = b.properties && (b.properties.title ?? b.properties.Name);
+    const title = t === undefined ? '' : textOf(t.title !== undefined ? t.title : t, 'title');
+    seq += 1;
+    const id = `00000000-0000-4000-8000-${seq.toString(16).padStart(12, '0')}`;
+    const at = stamp();
+    const page = { id, title, parent, created: at, edited: at };
+    state.pages.push(page);
+    return {
+      object: 'page', id, created_time: at, last_edited_time: at, in_trash: false, parent: copy(parent),
+      properties: { title: { id: 'title', type: 'title', title: richText(title) } },
+    };
+  }
+
+  function search(b) {
+    const q = typeof b.query === 'string' ? b.query.toLowerCase() : '';
+    const want = b.filter && b.filter.value;
+    if (b.filter !== undefined && (!b.filter || b.filter.property !== 'object' || (want !== 'page' && want !== 'data_source'))) throw invalid('filter is expected to be { property: "object", value: "page" | "data_source" }.');
+    const hit = (t) => !q || t.toLowerCase().includes(q);
+    const results = [];
+    if (want !== 'data_source') {
+      for (const pg of state.pages) if (hit(pg.title)) results.push({ object: 'page', id: pg.id, parent: copy(pg.parent), properties: { title: { id: 'title', type: 'title', title: richText(pg.title) } } });
+    }
+    if (want !== 'page') {
+      for (const ds of Object.values(state.dataSources)) {
+        if (ds.dbTitle !== undefined && hit(ds.dbTitle)) results.push({ object: 'data_source', id: ds.id, title: richText(ds.dbTitle), parent: { type: 'database_id', database_id: ds.databaseId } });
+      }
+    }
+    return { object: 'list', results, has_more: false, next_cursor: null };
+  }
+
   // ---- routes ----
   function route(method, path, query, body) {
     const seg = path.split('/').filter(Boolean).map((s) => decodeURIComponent(s));
@@ -367,10 +754,36 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
 
     if (seg[1] === 'data_sources' && seg.length === 3 && method === 'GET') return schemaOf(dsOf(seg[2]));
 
+    if (seg[1] === 'data_sources' && seg.length === 3 && method === 'PATCH') {
+      const ds = dsOf(seg[2]);
+      atomically(() => patchSchema(ds, b.properties));
+      return schemaOf(ds);
+    }
+
+    if (seg[1] === 'databases' && seg.length === 2 && method === 'POST') return createDatabase(b);
+
+    if (seg[1] === 'databases' && seg.length === 3 && method === 'GET') {
+      const db = state.databases[canon(seg[2])];
+      if (!db) throw notFound('that database');
+      return databaseOut(db);
+    }
+
+    if (seg[1] === 'blocks' && seg.length === 4 && seg[3] === 'children' && method === 'GET') {
+      if (!knownPage(seg[2])) throw notFound('that block');
+      const id = canon(seg[2]);
+      const results = Object.values(state.databases).filter((db) => db.parent.page_id === id).map((db) => ({
+        object: 'block', type: 'child_database', id: db.id, child_database: { title: db.title },
+      }));
+      return { object: 'list', results, has_more: false, next_cursor: null };
+    }
+
+    if (seg[1] === 'search' && seg.length === 2 && method === 'POST') return search(b);
+
     if (seg[1] === 'data_sources' && seg.length === 4 && seg[3] === 'query' && method === 'POST') {
       const ds = dsOf(seg[2]);
       const size = pageSizeOf(b.page_size);
       const start = b.start_cursor === undefined || b.start_cursor === null ? 0 : decodeCursor(b.start_cursor);
+      if (b.filter !== undefined) checkDepth(b.filter);
       const rows = ds.pages.filter((pg) => !pg.trashed && (b.filter === undefined || matches(ds, pg, b.filter)));
       if (b.filter !== undefined && !ds.pages.length) matches(ds, { values: {}, created: iso(0), edited: iso(0) }, b.filter); // validate the filter on an empty source too
       const slice = rows.slice(start, start + size);
@@ -383,6 +796,11 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
 
     if (seg[1] === 'pages' && seg.length === 2 && method === 'POST') {
       const parent = b.parent;
+      if (parent && parent.workspace === true) return createPlainPage(b, { type: 'workspace', workspace: true });
+      if (parent && typeof parent.page_id === 'string') {
+        if (!knownPage(parent.page_id)) throw notFound('that parent page');
+        return createPlainPage(b, { type: 'page_id', page_id: canon(parent.page_id) });
+      }
       if (!parent || typeof parent.data_source_id !== 'string') throw invalid('parent.data_source_id is required.');
       const ds = dsOf(parent.data_source_id);
       const page = create(ds, b.properties, {}, false);
@@ -399,7 +817,9 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
       if (page.trashed && b.in_trash !== false) throw invalid("Can't edit a page that is in the trash.");
       const staged = { ...page, values: { ...page.values } };
       applyProperties(ds, staged, b.properties, false); // all or nothing
+      const before = page.values;
       page.values = staged.values;
+      syncRelations(ds, page, before);
       if (b.in_trash !== undefined) page.trashed = b.in_trash;
       page.edited = stamp();
       return renderPage(ds, page);
@@ -492,6 +912,7 @@ export function createFakeNotion({ token = 'ntn_fake_token', dataSources = {} } 
 
   return {
     fetch: fetchFake,
+    token,
     state,
     calls,
     get maxInFlight() { return peak; },
