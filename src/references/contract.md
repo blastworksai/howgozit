@@ -12,7 +12,7 @@ Run everything from the repository root.
 - Named rules, failing when a named rule has no test: `node scripts/rules.mjs 17 18 S3`
 
 Every test name starts with the ID of the rule it proves and a space (`R17 …`, `S3 …`), or with `U ` for a helper test that proves no rule.
-`test/contract-coverage.test.mjs` fails when a rule R1 to R156 or S1 to S8 has no test, or a test names a rule that is not in this file.
+`test/contract-coverage.test.mjs` fails when a rule R1 to R164 or S1 to S8 has no test, or a test names a rule that is not in this file.
 Each check below is written as "Given … expect …"; the test builds the "given" with `fixtures/build.mjs` unless a fixture file is named.
 
 ## Words
@@ -40,7 +40,7 @@ A check-in of a habit with a `score` also carries a score.
 | Issues, milestones, Projects, labels | GitHub (or Notion, when `BOARD_BACKEND` says so) | the user, setup, the board's five actions, an agent |
 | `board.config.json` (settings) | data repo root | setup, the user, an agent on the user's say |
 | `theme.json` | data repo root | the user |
-| `state/brief.json`, `state/calendar.json`, `state/inbox.json`, `state/log.json`, `state/proposals.json` | data repo | an agent only |
+| `state/brief.json`, `state/calendar.json`, `state/inbox.json`, `state/log.json`, `state/proposals.json` | the data repo for a GitHub board, or `<config dir>/state/` when the board is started with `BOARD_CONFIG_DIR` (every Notion board) | an agent, or the Glitch feed (R161) |
 | Tokens (GitHub, one per owner; Notion), the form key, the back-end, repo name, port, mode, allowed hosts | environment variables of the running board | whoever deploys it |
 | iCloud sign-in (optional, R102) | environment variables of the running board | whoever deploys it |
 | Google Calendar secret addresses (optional, R119), one per calendar | environment variables of the running board; never the settings file, the data repo or GitHub | whoever deploys it |
@@ -932,6 +932,89 @@ The proposal has the shape of `references/setup-proposal.md` without `owner` and
 A record is saved after every write, and a second apply, or one resumed after a crash, never makes a second row.
 It ends by printing the environment lines to set, the form key made by a one-line command, never by the script.
 Check: given an empty fake workspace and the example proposal, expect the rows, the settings file, and a board that renders every proposed project and task; given a second apply, expect no write; given a crash after three writes then a resume, expect no duplicate; given `plan`, expect no write.
+
+### The Glitch feed
+
+**R157. The feed keeps only a sender name and a subject.**
+Per mailbox it reads Glitch's triage answer and keeps `display_name`, `subject`, `automated`, `disposition` and `date` of each item in `surface`.
+`from`, `address`, `domain`, `snippet`, `subject_raw`, ids and attachments are never read past parsing, so there is no fallback to `from`.
+Clean means control characters become spaces, whitespace is collapsed and the text is trimmed; anything that is not text becomes empty.
+The address scrub removes every run of characters that are not space, bracket or quote and that contains `@`.
+It then removes the empty pairs `<>`, `()`, `[]`, `""` and `''`, collapses spaces, and trims stray `<>"'` from both ends.
+It also removes any `http://`, `https://` or `www.` run up to the next whitespace, so nothing becomes a link.
+The sender text `from` is the scrubbed `display_name` cut to 200 characters, or `(unknown sender)` when that is empty.
+The `subject` is the scrubbed subject cut to 200 characters, or `(no subject)` when that is empty.
+Check: a hostile fixture with addresses in names and subjects, snippets and URLs; a name that is only an address gives `(unknown sender)` even when `from` holds a real name; a missing subject gives `(no subject)`; a 300-character name and subject are cut to 200; `<a@b.c>`, `("a@b.c")` and `www.x.y/z` leave nothing behind; sweep the written file and every printed line for `@`, `http` and the snippet sentinels.
+
+**R158. The feed's buckets and order.**
+An item with `automated: true` goes to `fyi`, any other to `reply`, and none to `decide`.
+Only an answer whose `status` is `ok` contributes, and an item that is not an object is skipped.
+The document is exactly `{"updated": <now as ISO 8601 with seconds and offset>, "counts": {"reply": n, "decide": 0, "fyi": n}, "threads": [{"bucket", "from", "subject", "why", "account"}, ...]}`, with the keys in that order.
+The counts are over the kept threads.
+It is written as JSON indented by 2 spaces plus a trailing newline, and a document of 256 KB or more is refused and not written.
+The `why` is `No rule for this sender yet` when the disposition is missing or blank, `You marked this sender important` for `watch_important`, `You marked this as a live issue` for `live_issue`, and `You allow this sender` for `allow`.
+Any other disposition gives `Rule: ` followed by the disposition with `_` turned into spaces, cleaned, scrubbed (R157) and cut to 200 characters.
+The date is ISO 8601, a date with no offset reads as UTC, and a missing or unparseable date sorts as 1970-01-01T00:00Z.
+Threads are ordered newest first, ties keep read order (mailboxes in config order, items in answer order), and the first 30 are kept.
+The `account` is `accountWord(label)` from R117, and when that gives null the `account` key is left out of that thread.
+Check: a contract-drift test gives the same labels to the feed's cleaner and to `accountWord` and expects identical results; a label that gives null leaves out `account`; `automated: true` and `false` and a missing flag; an `ask` answer and a non-object item contribute nothing; each `why` case; ties across two mailboxes; offset, no-offset, missing and unparseable dates; 31 items keep 30; key order, 2-space indent and trailing newline; a document of 256 KB or more is refused.
+
+**R159. A mailbox that is not healthy is skipped before any read.**
+Health comes from two read-only calls: `integrations/connections.py doctor` for Google (the rows whose `surfaces` contain `gmail`) and `integrations/ms_connections.py doctor` for Microsoft.
+A mailbox is healthy only when `health.status` is `connected`, and for Microsoft also signed in.
+The member's config names mailboxes by Glitch label, and the feed passes the matching account `id` to `--account`, so a label shared by two providers never becomes ambiguous.
+A triage answer is used only when its `status` is `ok`.
+An answer of `ask` or `dormant`, a non-zero exit, empty or unparseable output, or an answer missing the expected keys skips that mailbox.
+Each skipped mailbox is named with one plain reason: "needs you to sign in again in Glitch", "not connected in Glitch", "not a mailbox Glitch knows", "took too long" or "answer not understood".
+Glitch's own reason text is never printed or written, because it can name labels or more.
+The door's stdin is closed, and the feed opens no browser.
+Check: a fake health answer with one unhealthy mailbox gives no triage call for it; each non-ok answer, exit, empty output and missing key gives its named reason; no printed or written line holds Glitch's reason text.
+
+**R160. Time limits.**
+`run` allows 60 seconds per door call and 300 seconds per run.
+`check`, run attended in setup, allows 240 seconds per call, because Glitch's first triage of a mailbox does a one-time sent-mail backfill.
+A call over its limit is killed with its whole process group and named "took too long".
+No new call starts with under 3 seconds left.
+Check: an injected clock; a call over its limit is killed and named; a call with under 3 seconds left is never started; `check` allows 240 seconds.
+
+**R161. Where the file goes.**
+With `BOARD_CONFIG_DIR` set, the feed writes `<dir>/state/inbox.json` and `<dir>/state/log.json` atomically and makes no network call.
+When `BOARD_CONFIG_DIR` and `BOARD_REPO` are both set, the local folder wins and nothing goes to GitHub.
+Otherwise it writes `state/inbox.json` to `BOARD_REPO` through the contents API with `BOARD_GITHUB_TOKEN`, as one commit, skipped when the bytes are equal.
+The log is written only when the inbox file changed.
+It then puts one counts-only entry at the front of `state/log.json`, keeping 30.
+The entry is `{"t": "HH:MM" in the local time of the run, "agent": "Glitch", "what": "Updated inbox (<n> threads)"}` and never holds a name or subject.
+Commit messages are the fixed text `Glitch feed: inbox` and `Glitch feed: log`, and never hold a subject, sender or label.
+The token never appears in any printed line.
+A 409 or 422 on a write is named ("the board's repo changed during the write; the next run catches up") and the log is not written.
+If every mailbox failed, nothing is written.
+Check: both targets against `fake-github` and a temp folder; both variables set gives zero GitHub calls; equal bytes give zero PUTs and no log entry; a changed inbox gives one inbox commit and one log commit with the fixed messages; the log entry has the exact keys and holds no sender or subject; a hostile subject and label appear in no commit message; the token appears in no printed line; a 409 and a 422 give the named line and no log write; total failure gives zero writes.
+
+**R162. The scheduled job.**
+`feed.mjs schedule apply` installs exactly one job named `howgozit-feed` for the current OS.
+That is the Windows Task Scheduler task `\Howgozit\Feed`, the macOS LaunchAgent `ai.blastworks.howgozit.feed`, the Linux systemd user timer `howgozit-feed.timer`, or one crontab line tagged `# howgozit-feed` when no user service manager answers.
+`morning` is 06:00 daily and `hourly` is every hour from 07:00 to 22:00, both in the machine's local time.
+The job names `node` and `uv` by absolute paths resolved at `apply` time, because a scheduler's PATH is minimal, and never a `.cmd` shim on Windows.
+A second apply replaces only its own job, and `remove` leaves no trace.
+Glitch's own `\Glitch\Watch`, `com.glitch.watch` and `glitch-watch` are never read, changed or removed.
+`plan` prints what it would install and writes nothing.
+Check: per OS with an injected runner and filesystem; the job text holds absolute `node` and `uv` paths; a Glitch watch job present in the fake is untouched.
+
+**R163. The feed's own settings stay on the machine.**
+`feed.config.json` sits in the board's config folder, or the folder given by `--config-dir`.
+It holds `mailboxes` (1 to 10 Glitch labels), `frequency` (`morning` or `hourly`) and `glitch` (the absolute path to the Glitch folder).
+It is never written to the data repo.
+An invalid file stops the run with one plain sentence and writes nothing.
+`feed.mjs run|check --fixtures <dir>` replaces every Glitch call with `<dir>/health.json` (the two doctors' answers) and `<dir>/triage-<label>.json`, to prove the scheduler on a machine without Glitch.
+Check: valid, missing and each invalid field; with `--fixtures` no Glitch process is spawned and the answers come from the folder.
+
+**R164. A mailbox may have a colour.**
+Board settings may carry `mailboxes: { "<label>": "<colour>" }`, the colour one of `green`, `amber`, `orange`, `charcoal`, `blue`, `purple`, `red` or `grey`.
+The inbox tag for a thread whose `account` matches a key, after R117 cleaning, gets `data-colour="<colour>"`.
+An unknown colour or label shows the plain tag.
+Settings without `mailboxes` give the same board and page as before, byte for byte.
+Each colour is legible on the card in light and dark, with contrast of at least 4.5:1 for the tag text.
+Check: R117's fixture plus colours; byte-equality without the block; the contrast of every colour in both themes.
 
 ### Output safety
 

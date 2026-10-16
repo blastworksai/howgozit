@@ -312,6 +312,7 @@ Read the file, put the new entry first, write it back.
 
 Each agent saves its file as one commit to the data repo, through the harness's GitHub access.
 The commit holds that one file and nothing else.
+On a board started with `BOARD_CONFIG_DIR` (every Notion board) the state files live in `<config dir>/state/` instead, and the Glitch feed (R161) may write them too.
 The board writes no file to the data repo. It only reads the files there.
 The one file it writes is a local cache of its last good read, in its own data folder on the computer it runs on.
 

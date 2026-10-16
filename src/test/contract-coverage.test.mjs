@@ -29,11 +29,11 @@ const contractText = readFileSync(contractPath, 'utf8');
 const pending = JSON.parse(readFileSync(pendingPath, 'utf8'));
 const entries = testNamesIn(testDir);
 
-test('U the contract headings give R1 to R156 and S1 to S8', () => {
+test('U the contract headings give R1 to R164 and S1 to S8', () => {
   const known = contractRules(contractText);
-  for (let i = 1; i <= 156; i++) assert.ok(known.has('R' + i), `R${i} missing from the contract`);
+  for (let i = 1; i <= 164; i++) assert.ok(known.has('R' + i), `R${i} missing from the contract`);
   for (let i = 1; i <= 8; i++) assert.ok(known.has('S' + i), `S${i} missing from the contract`);
-  assert.equal(known.size, 164);
+  assert.equal(known.size, 172);
 });
 
 test('U every rule has a test unless it is listed as pending', () => {

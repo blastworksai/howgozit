@@ -47,7 +47,7 @@ function thread(t) {
 }
 
 // The mailbox label of a thread (R117): cleaned, cut at 20 characters; absent, not text, empty or holding an @ is null.
-function accountWord(label) {
+export function accountWord(label) {
   if (typeof label !== 'string') return null;
   const out = cleanWord(label);
   if (out === '' || out.includes('@')) return null;
