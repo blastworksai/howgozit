@@ -9,7 +9,7 @@ const MAX_BYTES = 256 * 1024;
 
 // A run of characters that are not space, bracket or quote; one holding an @ is an address (R157).
 const ADDRESS = /[^\s<>()[\]"']*@[^\s<>()[\]"']*/g;
-const LINK = /(?:https?:\/\/|www\.)\S*/gi;
+const LINK = /(?:https?:\/\/|www\.)\S*|\S*:\/\/\S*/gi;
 const EMPTY_PAIRS = /<\s*>|\(\s*\)|\[\s*\]|"\s*"|'\s*'/g;
 const STRAY_ENDS = /^[\s<>"']+|[\s<>"']+$/g;
 
@@ -19,12 +19,22 @@ export function cleanText(v) {
   return v.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// R157 scrub: addresses and links out, then the empty pairs they leave, then stray <>"' at both ends.
+// Whatever still looks like an address or a link after the cap is removed run by run.
+const LEFTOVER = /\S*(?:@|:\/\/|http|www\.)\S*/gi;
+const SCRUB_ROUNDS = 8;
+
+// R157 scrub: addresses, empty pairs and links out, repeated until the text stops changing, because a removal can
+// join the pieces around it into a new address or link (htt<x@y.test>ps://...); then stray <>"' at both ends.
 export function scrubText(s) {
-  let out = cleanText(s).replace(ADDRESS, '').replace(LINK, '');
-  let before;
-  do { before = out; out = out.replace(EMPTY_PAIRS, ''); } while (out !== before);
-  return out.replace(/\s+/g, ' ').replace(STRAY_ENDS, '');
+  let out = cleanText(s);
+  let settled = false;
+  for (let i = 0; i < SCRUB_ROUNDS && !settled; i++) {
+    const next = out.replace(ADDRESS, '').replace(EMPTY_PAIRS, '').replace(LINK, '').replace(/\s+/g, ' ').trim();
+    settled = next === out;
+    out = next;
+  }
+  if (!settled) out = out.replace(LEFTOVER, '').replace(/\s+/g, ' ').trim();
+  return out.replace(STRAY_ENDS, '');
 }
 
 // Cut at 200 characters (code points, like the board), then drop the space a cut may leave.

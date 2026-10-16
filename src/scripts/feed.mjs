@@ -6,7 +6,7 @@ import fsp from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import os from 'node:os';
-import { resolve, join, delimiter } from 'node:path';
+import { resolve, join, delimiter, isAbsolute, win32 } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFeedConfig, readFeedEnv } from '../feed/config.mjs';
 import { readMailboxes, realRun } from '../feed/doors.mjs';
@@ -26,9 +26,9 @@ async function isFile(fs, p) {
 }
 
 // uv: --uv, then every PATH entry (uv, uv.exe), then ~/.local/bin, ~/.cargo/bin, /opt/homebrew/bin, /usr/local/bin. Never a .cmd shim.
-export async function findUv({ explicit, env, home, fs }) {
+export async function findUv({ explicit, env, home, fs, cwd = process.cwd() }) {
   if (explicit) return resolve(explicit);
-  const dirs = String((env && (env.PATH || env.Path)) || '').split(delimiter).filter(Boolean);
+  const dirs = String((env && (env.PATH || env.Path)) || '').split(delimiter).filter(Boolean).map((d) => resolve(cwd, d));
   dirs.push(join(home, '.local', 'bin'), join(home, '.cargo', 'bin'), '/opt/homebrew/bin', '/usr/local/bin');
   for (const d of dirs) {
     for (const name of ['uv', 'uv.exe']) {
@@ -44,7 +44,9 @@ function commandRun(cmd, args, { input } = {}) {
     let out = '';
     let errText = '';
     let child;
-    try { child = spawn(cmd, args, { shell: false, windowsHide: true }); } catch { done({ code: 127, stdout: '', stderr: '' }); return; }
+    const clean = { ...process.env };
+    for (const k of Object.keys(clean)) if (k.toUpperCase().startsWith('BOARD_')) delete clean[k];
+    try { child = spawn(cmd, args, { shell: false, windowsHide: true, env: clean }); } catch { done({ code: 127, stdout: '', stderr: '' }); return; }
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { errText += d; });
     child.on('error', () => done({ code: 127, stdout: out, stderr: errText }));
@@ -78,12 +80,16 @@ export async function main(argv, deps) {
     const home = deps.home || os.homedir();
     const explicitUv = flag(args, '--uv');
     const fixturesDir = flag(args, '--fixtures');
+    if (verb === 'schedule' && (sub === 'plan' || sub === 'apply') && explicitUv !== null
+      && (!(isAbsolute(explicitUv) || win32.isAbsolute(explicitUv)) || /\.(cmd|bat)$/i.test(explicitUv))) {
+      return fail('--uv must be the absolute path to the uv program itself, not a relative path or a .cmd or .bat shim.');
+    }
     const uv = (await findUv({ explicit: explicitUv, env, home, fs })) ;
 
     if (verb === 'schedule') {
       if (!uv) return fail('uv was not found; pass --uv <absolute path to uv>.');
       const schedule = await import('../feed/schedule.mjs');
-      const cfg = { frequency: config.frequency, nodePath: process.execPath, uvPath: uv, feedScript: FEED_SCRIPT, configDir };
+      const cfg = { frequency: config.frequency, nodePath: process.execPath, uvPath: uv, feedScript: FEED_SCRIPT, configDir, ...(fixturesDir && (sub === 'plan' || sub === 'apply') ? { fixturesDir: resolve(cwd, fixturesDir) } : {}) };
       const sdeps = { run: deps.scheduleRun || commandRun, fs, home, user: deps.user || os.userInfo().username };
       const osName = deps.osName || process.platform;
       const result = await schedule[sub](osName, cfg, sdeps);
@@ -98,6 +104,7 @@ export async function main(argv, deps) {
       return 0;
     }
 
+    const runStart = clock.now();
     const mode = verb === 'check' ? 'check' : 'run';
     let target = null;
     if (verb === 'run') {
@@ -108,7 +115,8 @@ export async function main(argv, deps) {
     if (verb === 'run' && !target) return fail('Set BOARD_CONFIG_DIR, or BOARD_REPO with BOARD_GITHUB_TOKEN, so the feed knows where to write.');
 
     const res = await readMailboxes({ ...config, uv: uv || 'uv' }, { run, clock, mode, fixturesDir: fixturesDir ? resolve(cwd, fixturesDir) : undefined, fs });
-    const items = res.skipped.map((s) => `${s.label}: ${s.reason}`);
+    const safe = (l) => (/@|:\/\/|http|www\.|[\u0000-\u001f\u007f-\u009f]/i.test(String(l)) ? '(a mailbox)' : String(l));
+    const items = res.skipped.map((s) => `${safe(s.label)}: ${s.reason}`);
     const now = new Date(clock.now());
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const n = res.accounts.length;
@@ -127,7 +135,7 @@ export async function main(argv, deps) {
     }
     const inboxText = dump(doc);
     const entry = logEntry(now, count, { timeZone });
-    const w = await writeState(target, { inboxText, entry }, { fetch, fs });
+    const w = await writeState(target, { inboxText, entry }, { fetch, fs, deadline: runStart + 300000 });
     items.push(w.line);
     emit(`Inbox: ${count} threads from ${mbx}`, items);
     return 0;

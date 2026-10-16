@@ -24,6 +24,9 @@ export async function readFeedConfig(dir, { fs }) {
   }
   if (!json || typeof json !== 'object' || Array.isArray(json)) return bad(`${CONFIG_FILE} must hold one JSON object.`);
   const { mailboxes, frequency, glitch } = json;
+  if (Array.isArray(mailboxes) && mailboxes.some((m) => typeof m === 'string' && /@|:\/\/|[\u0000-\u001f\u007f-\u009f]/.test(m))) {
+    return bad(`${CONFIG_FILE}: a mailbox label may not hold an address, a link or a control character; use the label Glitch shows.`);
+  }
   if (!Array.isArray(mailboxes) || mailboxes.length < 1 || mailboxes.length > 10
     || !mailboxes.every((m) => typeof m === 'string' && m.trim() !== '')) {
     return bad(`${CONFIG_FILE}: "mailboxes" must be a list of 1 to 10 Glitch mailbox labels.`);

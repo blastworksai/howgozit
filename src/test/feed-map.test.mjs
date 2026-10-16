@@ -444,3 +444,66 @@ test('R158 the log entry and the good fixtures\' dump carry no address, link or 
   sweep(dump(doc), 'the dump');
   sweep(JSON.stringify(logEntry(NOW, doc.threads.length, TZ)), 'the log entry');
 });
+
+// ---------------------------------------------------------------- R157 regression: a removal must not join characters into a link
+// (cross-family review finding 3: htt<x@y.test>ps://... became https://... after the link pass had already run)
+
+const noLink = (s, where) => {
+  assert.equal(/http/i.test(s), false, `${where} holds http: ${JSON.stringify(s)}`);
+  assert.equal(/www\./i.test(s), false, `${where} holds www.: ${JSON.stringify(s)}`);
+  assert.equal(s.includes('://'), false, `${where} holds ://: ${JSON.stringify(s)}`);
+  assert.equal(s.includes('@'), false, `${where} holds @: ${JSON.stringify(s)}`);
+};
+
+test('R157 regression: an address removed from inside "https" does not leave a link behind', () => {
+  const s = scrubText('htt<x@y.test>ps://secret.example.test/path');
+  noLink(s, 'scrubText');
+  noLink(scrubText(cleanText('see htt<x@y.test>ps://secret.example.test/path now')), 'scrubText with words around');
+});
+
+test('R157 regression: the same join in a subject, a display name and a disposition leaves no link in the thread', () => {
+  const trick = 'htt<x@y.test>ps://secret.example.test/path';
+  const [t] = one(item(1, { display_name: `Jo ${trick}`, subject: `Hi ${trick}`, disposition: `rule_${trick}` }));
+  noLink(t.from, 'from');
+  noLink(t.subject, 'subject');
+  noLink(t.why, 'why');
+  noLink(dump(buildInbox(NOW, [{ label: 'Work', triage: ok([item(1, { display_name: trick, subject: trick, disposition: trick })]) }], TZ)), 'the dump');
+});
+
+test('R157 regression: an address removed from inside www gives no www. run', () => {
+  for (const s of ['ww<a@b.c>w.x.y', 'www<a@b.c>.x.y', 'w<a@b.c>ww.x.y/z', 'www.<a@b.c>x.y']) noLink(scrubText(s), s);
+});
+
+test('R157 regression: empty pairs removed from inside http, https and www give no link', () => {
+  const glue = ['()', '[]', '""', "''", '<>'];
+  const bases = ['h#ttps://secret.example.test/p', 'ht#tp://secret.example.test/p', 'https#://secret.example.test/p', 'https:#//secret.example.test/p', 'ww#w.secret.example.test/p', 'www#.secret.example.test/p'];
+  for (const g of glue) for (const b of bases) {
+    const s = b.replace('#', g);
+    noLink(scrubText(s), s);
+    noLink(one(item(1, { subject: s }))[0].subject, `subject ${s}`);
+  }
+});
+
+test('R157 regression: nested and repeated glue (("") and a pair left empty by another removal) still joins nothing', () => {
+  for (const s of ['h(("" ))ttps://x.test', 'h("")ttps://x.test', 'h(<a@b.c>)ttps://x.test', 'h[(x@y.test)]ttps://x.test', 'htt<x@y.test><a@b.c>ps://x.test', 'h<>t<>t<>p<>s<>:<>/<>/<>x.test']) {
+    noLink(scrubText(s), s);
+  }
+});
+
+test('R157 regression: property, 400 generated hostile strings mixing addresses, brackets and link fragments never leave @, http, www. or ://', () => {
+  let seed = 20261016;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const glue = ['<a@b.c>', '<x@y.test>', '()', '[]', '""', "''", '<>', '("a@b.c")', '[<>]', '(())', '"<>"', '<(a@b.c)>', '(<>)'];
+  const links = ['https://secret.example.test/path', 'http://secret.example.test', 'www.secret.example.test/p', 'HTTPS://SECRET.EXAMPLE.TEST/P', 'Www.x.y/z'];
+  const words = ['hello', 'Jo', 'Bloggs', 'invoice', 'a@b.c', 'jo@example.test', '"', "'", '<', '>', '(', ')', '[', ']', '\u0007', '\n'];
+  for (let n = 0; n < 400; n++) {
+    let link = Array.from(pick(links));
+    for (let k = 1 + Math.floor(rnd() * 3); k > 0; k--) link.splice(1 + Math.floor(rnd() * (link.length - 1)), 0, pick(glue));
+    const parts = [pick(words), link.join(''), pick(words)];
+    if (rnd() < 0.5) parts.splice(Math.floor(rnd() * 3), 0, pick(glue));
+    const s = parts.join(rnd() < 0.5 ? ' ' : '');
+    noLink(scrubText(s), `case ${n} (${JSON.stringify(s)}) via scrubText`);
+    noLink(scrubText(cleanText(s)), `case ${n} (${JSON.stringify(s)}) via cleanText then scrubText`);
+  }
+});

@@ -941,7 +941,8 @@ Per mailbox it reads Glitch's triage answer and keeps `display_name`, `subject`,
 Clean means control characters become spaces, whitespace is collapsed and the text is trimmed; anything that is not text becomes empty.
 The address scrub removes every run of characters that are not space, bracket or quote and that contains `@`.
 It then removes the empty pairs `<>`, `()`, `[]`, `""` and `''`, collapses spaces, and trims stray `<>"'` from both ends.
-It also removes any `http://`, `https://` or `www.` run up to the next whitespace, so nothing becomes a link.
+It also removes any `<scheme>://` or `www.` run up to the next whitespace, so nothing becomes a link.
+These removals repeat until the text stops changing, so a removal can never join the pieces of a link or an address back together.
 The sender text `from` is the scrubbed `display_name` cut to 200 characters, or `(unknown sender)` when that is empty.
 The `subject` is the scrubbed subject cut to 200 characters, or `(no subject)` when that is empty.
 Check: a hostile fixture with addresses in names and subjects, snippets and URLs; a name that is only an address gives `(unknown sender)` even when `from` holds a real name; a missing subject gives `(no subject)`; a 300-character name and subject are cut to 200; `<a@b.c>`, `("a@b.c")` and `www.x.y/z` leave nothing behind; sweep the written file and every printed line for `@`, `http` and the snippet sentinels.
@@ -995,20 +996,22 @@ Check: both targets against `fake-github` and a temp folder; both variables set 
 That is the Windows Task Scheduler task `\Howgozit\Feed`, the macOS LaunchAgent `ai.blastworks.howgozit.feed`, the Linux systemd user timer `howgozit-feed.timer`, or one crontab line tagged `# howgozit-feed` when no user service manager answers.
 `morning` is 06:00 daily and `hourly` is every hour from 07:00 to 22:00, both in the machine's local time.
 The job names `node` and `uv` by absolute paths resolved at `apply` time, because a scheduler's PATH is minimal, and never a `.cmd` shim on Windows.
+Given `--fixtures <dir>`, `plan` and `apply` add `--fixtures <dir>` with the folder as an absolute path to the job's command, to prove the job on a machine without Glitch; without it the job's command is unchanged.
 A second apply replaces only its own job, and `remove` leaves no trace.
 Glitch's own `\Glitch\Watch`, `com.glitch.watch` and `glitch-watch` are never read, changed or removed.
 `plan` prints what it would install and writes nothing.
-Check: per OS with an injected runner and filesystem; the job text holds absolute `node` and `uv` paths; a Glitch watch job present in the fake is untouched.
+Check: per OS with an injected runner and filesystem; the job text holds absolute `node` and `uv` paths; a Glitch watch job present in the fake is untouched; with a fixtures folder whose path holds a space, the job text holds `--fixtures` and that path correctly quoted for the OS, and without one no `--fixtures` appears anywhere.
 
 **R163. The feed's own settings stay on the machine.**
 `feed.config.json` sits in the board's config folder, or the folder given by `--config-dir`.
 It holds `mailboxes` (1 to 10 Glitch labels), `frequency` (`morning` or `hourly`) and `glitch` (the absolute path to the Glitch folder).
+A label holding `@`, `://` or a control character is refused.
 It is never written to the data repo.
 An invalid file stops the run with one plain sentence and writes nothing.
 `feed.mjs run|check --fixtures <dir>` replaces every Glitch call with `<dir>/health.json` (the two doctors' answers) and `<dir>/triage-<label>.json`, to prove the scheduler on a machine without Glitch.
 Beside it, `feed.env` may hold `BOARD_REPO`, `BOARD_GITHUB_TOKEN` and `BOARD_CONFIG_DIR` as `KEY=VALUE` lines, for the scheduled job, which starts with none of the board's environment; no other key is read, and a variable already in the environment wins over the file.
 On macOS and Linux a `feed.env` that its group or others can read stops the run with one plain sentence, and the token is never printed.
-Check: valid, missing and each invalid field; with `--fixtures` no Glitch process is spawned and the answers come from the folder. With an empty environment and a `feed.env` the run reads its keys; the environment wins over the file; an unknown key (`PATH`, `NODE_OPTIONS`) is ignored and never reaches a spawned process; comments and blank lines are ignored; a `feed.env` readable by group or others stops the run with one sentence and writes nothing; the token appears in no printed line on any path.
+Check: valid, missing and each invalid field (a label holding `@`, `://` or a control character included); with `--fixtures` no Glitch process is spawned and the answers come from the folder. With an empty environment and a `feed.env` the run reads its keys; the environment wins over the file; an unknown key (`PATH`, `NODE_OPTIONS`) is ignored and never reaches a spawned process; comments and blank lines are ignored; a `feed.env` readable by group or others stops the run with one sentence and writes nothing; the token appears in no printed line on any path.
 
 **R164. A mailbox may have a colour.**
 Board settings may carry `mailboxes: { "<label>": "<colour>" }`, the colour one of `green`, `amber`, `orange`, `charcoal`, `blue`, `purple`, `red` or `grey`.

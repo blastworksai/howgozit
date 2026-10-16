@@ -291,3 +291,49 @@ test('R161 writeState with a null target returns wrote:false and makes no call',
   assert.equal(fetch.seen.length, 0);
   assert.deepEqual(spy.writes, []);
 });
+
+// R160/R161 deadline: every GitHub request gets an AbortSignal that fires at `deadline` (absolute Date.now()-style ms).
+const LATE = 'GitHub did not answer in time; the next run catches up.';
+function stalling(inner, match) {
+  const signals = [];
+  const fn = async (url, init = {}) => {
+    signals.push(init.signal);
+    if (!match(String(url), String(init.method || 'GET').toUpperCase())) return inner(url, init);
+    return new Promise((resolve, reject) => {
+      const stop = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      if (!init.signal) return; // no signal: never settles, the test's time bound catches it
+      if (init.signal.aborted) return stop();
+      init.signal.addEventListener('abort', stop, { once: true });
+    });
+  };
+  fn.signals = signals;
+  return fn;
+}
+const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('writeState did not return within ' + ms + ' ms')), ms))]);
+
+test('R160 R161 a stalled inbox request: returns within ~1 s with the named line, wrote:false, signal passed, no throw', async () => {
+  const f = createFakeGitHub({ repo: REPO, files: { [INBOX]: inboxOf('Old'), [LOG]: text([]) } });
+  const fetch = stalling(fetchOver(f), (u) => u.includes('/contents/' + INBOX));
+  const t0 = Date.now();
+  const r = await within(writeState(gh(f), { inboxText: inboxOf('New'), entry: entry() }, { fetch, fs: fsp, deadline: Date.now() + 200 }), 3000);
+  assert.ok(Date.now() - t0 < 1500);
+  assert.equal(r.wrote, false);
+  assert.equal(r.line, LATE);
+  assert.ok(fetch.signals.length >= 1);
+  for (const s of fetch.signals) assert.ok(s && typeof s.aborted === 'boolean');
+  assert.equal(puts(f, LOG).length, 0);
+  assert.ok(!r.line.includes(TOKEN));
+});
+
+test('R160 R161 the inbox landed but the log request stalls: wrote:true with the named line, no throw', async () => {
+  const f = createFakeGitHub({ repo: REPO, files: { [INBOX]: inboxOf('Old'), [LOG]: text([]) } });
+  const fetch = stalling(fetchOver(f), (u) => u.includes('/contents/' + LOG));
+  const t0 = Date.now();
+  const r = await within(writeState(gh(f), { inboxText: inboxOf('New'), entry: entry() }, { fetch, fs: fsp, deadline: Date.now() + 200 }), 3000);
+  assert.ok(Date.now() - t0 < 1500);
+  assert.equal(r.wrote, true);
+  assert.equal(r.line, LATE);
+  assert.equal(f.state.files[INBOX].text, inboxOf('New'));
+  assert.equal(puts(f, LOG).length, 0);
+  for (const s of fetch.signals) assert.ok(s && typeof s.aborted === 'boolean');
+});

@@ -105,7 +105,11 @@ function taskFullPath(stmt) {
 function makeRunner(world, fs) {
   const calls = [];
   const st = {
-    cron: world === 'linux-cron' ? CRON_SEED : null,
+    cron: world === 'linux-cron' || world === 'linux-both' ? CRON_SEED : null,
+    systemd: world === 'linux-systemd', // mutable: tests flip it mid-way
+    failBootout: null, // darwin: exit code returned for a loaded howgozit agent
+    failDisable: false, // systemd: disable/stop of a present howgozit unit exits 1
+    failUnregister: false, // win32: howgozit task cannot be removed
     tasks: new Map(world === 'win32' ? [[WIN_GLITCH, WIN_GLITCH_SPEC]] : []),
     loaded: new Set(world === 'darwin' ? ['com.glitch.watch'] : []),
   };
@@ -119,9 +123,16 @@ function makeRunner(world, fs) {
     call.text = [call.cmd, ...call.args].join(' ');
     if (base === 'systemctl') {
       const a = call.args.filter((x) => x !== '--user');
-      if (a[0] === 'show-environment') return world === 'linux-systemd' ? ok('HOME=/home/tester\n') : bad(1, 'Failed to connect to bus');
+      if (a[0] === 'show-environment') return st.systemd ? ok('HOME=/home/tester\n') : bad(1, 'Failed to connect to bus');
+      if (!st.systemd) return bad(1, 'Failed to connect to bus'); // no user manager: every other verb fails too
       if (['is-enabled', 'is-active', 'status', 'cat', 'show', 'list-timers'].includes(a[0])) {
         return fs.files.has(timerPath) ? ok() : bad(1, 'not found');
+      }
+      if (['disable', 'stop'].includes(a[0])) {
+        const unit = [...a].reverse().find((x) => /^howgozit-feed\.(timer|service)$/.test(x));
+        if (unit && !fs.files.has(`/home/tester/.config/systemd/user/${unit}`)) return bad(1, `Unit file ${unit} does not exist.`);
+        if (unit && st.failDisable) return bad(1, 'Failed to disable unit: Access denied');
+        return ok();
       }
       return ok();
     }
@@ -146,6 +157,7 @@ function makeRunner(world, fs) {
       }
       if (verb === 'bootout') {
         if (!st.loaded.has(label)) return bad(113, 'Boot-out failed: 113');
+        if (st.failBootout && /howgozit/.test(label)) return bad(st.failBootout, `Boot-out failed: ${st.failBootout}`);
         st.loaded.delete(label);
         return ok();
       }
@@ -162,7 +174,10 @@ function makeRunner(world, fs) {
         if (/\bUnregister-ScheduledTask\b/i.test(s)) {
           const p = taskFullPath(s);
           if (p === null) return bad(1, 'unparsed unregister');
-          if (st.tasks.has(p)) st.tasks.delete(p);
+          if (st.tasks.has(p) && st.failUnregister && /howgozit/i.test(p)) {
+            if (!/-ErrorAction\s+SilentlyContinue/i.test(s)) return bad(1, 'Access is denied');
+            // SilentlyContinue hides the failure: code 0, task still there
+          } else if (st.tasks.has(p)) st.tasks.delete(p);
           else if (!/-ErrorAction\s+SilentlyContinue/i.test(s)) return bad(1, `task ${p} not found`);
         } else if (/(?<![A-Za-z])Register-ScheduledTask\b/i.test(s)) {
           const p = taskFullPath(s);
@@ -187,6 +202,7 @@ function makeRunner(world, fs) {
       if (lower.includes('/query')) return p && st.tasks.has(p) ? ok() : bad(1, 'not found');
       if (lower.includes('/delete')) {
         if (p && st.tasks.has(p)) {
+          if (st.failUnregister && /howgozit/i.test(p)) return bad(1, 'Access is denied');
           st.tasks.delete(p);
           return ok();
         }
@@ -271,7 +287,7 @@ const SCENARIOS = [
 function makeEnv(sc, frequency = 'morning') {
   const seed = {};
   if (sc.id === 'darwin') seed[`${sc.home}/Library/LaunchAgents/com.glitch.watch.plist`] = PLIST_GLITCH;
-  if (sc.id === 'linux-systemd') {
+  if (sc.id === 'linux-systemd' || sc.id === 'linux-both') {
     seed[`${sc.home}/.config/systemd/user/glitch-watch.service`] = UNIT_GLITCH_SERVICE;
     seed[`${sc.home}/.config/systemd/user/glitch-watch.timer`] = UNIT_GLITCH_TIMER;
   }
@@ -651,7 +667,309 @@ test('R162 linux: the service-manager probe picks systemd or cron', async () => 
   assert.equal((await plan('linux', cr.cfg, cr.deps)).kind, 'cron');
   assert.ok(sd.runner.calls.some((c) => c.cmd === 'systemctl' && c.args.join(' ') === '--user show-environment'));
   await apply('linux', sd.cfg, sd.deps);
-  assert.ok(!sd.runner.calls.some((c) => c.cmd === 'crontab'), 'systemd world never touches crontab');
+  const cronWrites = sd.runner.calls.filter((c) => c.cmd === 'crontab' && !(c.args.length === 1 && c.args[0] === '-l'));
+  assert.deepEqual(cronWrites.map((c) => c.text), [], 'systemd path runs no mutating crontab call (read-only crontab -l is allowed)');
+  assert.equal(sd.runner.st.cron, null, 'crontab content unchanged');
   await apply('linux', cr.cfg, cr.deps);
   assert.deepEqual(ourFsPaths(cr), [], 'cron world writes no unit files');
+});
+
+// ---------------------------------------------------------------------------
+// A6: cfg.fixturesDir (absolute, optional) adds `--fixtures <dir>` to the job command.
+// ---------------------------------------------------------------------------
+const FIX_POSIX = '/opt/hg/fixtures dir/one';
+const FIX_WIN = 'C:\\hg\\fixtures dir\\one';
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function assertFixturesQuoted(sc, text, dir, label) {
+  const d = reEsc(dir);
+  let re;
+  switch (sc.id) {
+    case 'darwin':
+      re = new RegExp(`<string>--fixtures</string>\\s*<string>${d}</string>`);
+      break;
+    case 'win32':
+      // quoted for PowerShell, in whatever quoting layers the command nests: at least one quote precedes the path
+      re = new RegExp(`--fixtures\\s+[\\\\'"\`]+${d}`);
+      break;
+    case 'linux-systemd':
+      re = new RegExp(`--fixtures\\s+(?:"${d}"|'${d}')`);
+      break;
+    default: {
+      const esc = reEsc(dir.replace(/ /g, '\\ '));
+      re = new RegExp(`--fixtures\\s+(?:'${d}'|"${d}"|${esc})`);
+    }
+  }
+  assert.ok(re.test(text), `${label}: --fixtures followed by the quoted path ${dir} in:\n${text}`);
+  assert.ok(text.indexOf('--fixtures') > text.indexOf('run'), `${label}: --fixtures comes after run`);
+}
+
+for (const sc of SCENARIOS) {
+  const fixDir = sc.id === 'win32' ? FIX_WIN : FIX_POSIX;
+  const name = (s) => `R162 ${sc.id}: ${s}`;
+
+  test(name('fixturesDir adds --fixtures with the quoted absolute path to the planned job'), async () => {
+    const e = makeEnv(sc);
+    const cfg = { ...e.cfg, fixturesDir: fixDir };
+    const p = await plan(sc.osName, cfg, e.deps);
+    const text = planJobText(p);
+    assertCommandLine(text, cfg, 'plan');
+    assertFixturesQuoted(sc, text, fixDir, 'plan');
+  });
+
+  test(name('fixturesDir adds --fixtures with the quoted absolute path to the installed job'), async () => {
+    const e = makeEnv(sc);
+    const cfg = { ...e.cfg, fixturesDir: fixDir };
+    await apply(sc.osName, cfg, e.deps);
+    const text = installedJobText(e);
+    assertCommandLine(text, cfg, 'apply');
+    assertFixturesQuoted(sc, text, fixDir, 'apply');
+  });
+
+  test(name('without fixturesDir no --fixtures appears anywhere'), async () => {
+    const e = makeEnv(sc);
+    const p = await plan(sc.osName, e.cfg, e.deps);
+    assert.ok(!planJobText(p).includes('--fixtures'), 'plan text');
+    await apply(sc.osName, e.cfg, e.deps);
+    assert.ok(!installedJobText(e).includes('--fixtures'), 'installed job text');
+    for (const c of e.runner.calls) assert.ok(!`${c.text}\n${c.input ?? ''}`.includes('--fixtures'), `run call: ${c.text}`);
+    for (const [, v] of e.fs.files) assert.ok(!v.includes('--fixtures'), 'file text');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Review findings 4, 5, 6 (feed-review-codex-1.md): regression tests.
+// Extra fake switches (see makeRunner): st.systemd (flip systemd availability),
+// st.failBootout (darwin exit code for a loaded howgozit agent, distinct from 113),
+// st.failDisable (systemd disable/stop of a present howgozit unit exits 1; of an absent one, exits 1
+//   "does not exist"; with no user manager every systemctl verb but show-environment exits 1),
+// st.failUnregister (win32: the howgozit task survives; with -ErrorAction SilentlyContinue the
+//   command still exits 0, so remove must verify the task is gone).
+// ---------------------------------------------------------------------------
+async function outcome(fn) {
+  try {
+    return { threw: false, res: await fn() };
+  } catch (err) {
+    return { threw: true, msg: String(err && err.message), res: undefined };
+  }
+}
+// A refusal/failure is: a rejection with a one-sentence message, or a result carrying an error string or ok:false.
+function isFailure(o) {
+  if (o.threw) return o.msg.length > 0 && !/[\r\n]/.test(o.msg);
+  const r = o.res || {};
+  if (typeof r.error === 'string') return r.error.length > 0 && !/[\r\n]/.test(r.error);
+  return r.ok === false;
+}
+const describeOutcome = (o) => (o.threw ? `threw: ${o.msg}` : `returned: ${JSON.stringify(o.res)}`);
+// A clean removal: no throw, no error, not still installed.
+function isSuccess(o) {
+  if (o.threw) return false;
+  const r = o.res || {};
+  return r.installed !== true && r.error === undefined && r.ok !== false;
+}
+function worldSnapshot(e) {
+  return JSON.stringify([[...e.fs.files], e.runner.st.cron, [...e.runner.st.tasks], [...e.runner.st.loaded]]);
+}
+
+// ---- Finding 4: control characters in any path refuse and change nothing ----
+const PATH_FIELDS = ['nodePath', 'uvPath', 'feedScript', 'configDir', 'fixturesDir'];
+const BAD_CHARS = [['LF', '\n'], ['CR', '\r'], ['BEL', '\u0007'], ['TAB', '\t']];
+
+for (const sc of SCENARIOS) {
+  for (const verb of ['plan', 'apply']) {
+    test(`R162 ${sc.id}: ${verb} refuses a line break or control character in any path and changes nothing`, async () => {
+      const fn = verb === 'plan' ? plan : apply;
+      for (const field of PATH_FIELDS) {
+        for (const [label, ch] of BAD_CHARS) {
+          const e = makeEnv(sc);
+          const cfg = { ...e.cfg, fixturesDir: sc.id === 'win32' ? FIX_WIN : FIX_POSIX };
+          cfg[field] = cfg[field] + ch + 'x';
+          const before = worldSnapshot(e);
+          const o = await outcome(() => fn(sc.osName, cfg, e.deps));
+          const tag = `${field} with ${label}`;
+          assert.ok(isFailure(o), `${tag}: expected a one-sentence refusal, got ${describeOutcome(o)}`);
+          assert.equal(worldSnapshot(e), before, `${tag}: fs, crontab, tasks and agents unchanged`);
+          assert.deepEqual(fsMutations(e), [], `${tag}: no fs mutation`);
+          assert.deepEqual(e.runner.mutating().map((c) => c.text), [], `${tag}: no mutating command`);
+        }
+      }
+    });
+  }
+
+  test(`R162 ${sc.id}: the line-break injection payload never makes a second job line`, async () => {
+    const payload = '/tmp/uv\n* * * * * /usr/bin/touch /tmp/feed-injected #';
+    for (const verb of [plan, apply]) {
+      const e = makeEnv(sc);
+      const before = worldSnapshot(e);
+      const o = await outcome(() => verb(sc.osName, { ...e.cfg, uvPath: payload }, e.deps));
+      assert.ok(isFailure(o), `expected refusal, got ${describeOutcome(o)}`);
+      assert.equal(worldSnapshot(e), before, 'nothing changed');
+      assert.deepEqual(e.runner.mutating().map((c) => c.text), []);
+      for (const c of e.runner.calls) {
+        assert.ok(!`${c.text}\n${c.input ?? ''}`.includes('feed-injected'), `injected text reached a run call: ${c.text}`);
+      }
+      if (sc.id === 'linux-cron') assert.equal(e.runner.st.cron, CRON_SEED, 'crontab untouched');
+    }
+  });
+}
+
+// ---- Finding 5: linux can switch between systemd and cron without leaving two jobs ----
+const BOTH = {
+  id: 'linux-both',
+  osName: 'linux',
+  home: '/home/tester',
+  paths: SCENARIOS[3].paths,
+  kind: null,
+};
+const bothUnits = (e) => ourFsPaths(e);
+const UNITS = [
+  '/home/tester/.config/systemd/user/howgozit-feed.service',
+  '/home/tester/.config/systemd/user/howgozit-feed.timer',
+];
+function bothGlitchIntact(e) {
+  assert.equal(e.fs.files.get('/home/tester/.config/systemd/user/glitch-watch.service'), UNIT_GLITCH_SERVICE);
+  assert.equal(e.fs.files.get('/home/tester/.config/systemd/user/glitch-watch.timer'), UNIT_GLITCH_TIMER);
+  for (const keep of CRON_SEED.split('\n').filter(Boolean)) {
+    assert.equal(e.runner.st.cron.split('\n').filter((l) => l === keep).length, 1, `kept: ${keep}`);
+  }
+}
+async function installBoth(e) {
+  // our cron line AND our units at once: units via a systemd apply, then a cron line appended by hand
+  e.runner.st.systemd = true;
+  await apply('linux', e.cfg, e.deps);
+  e.runner.st.cron += `0 6 * * * '${e.cfg.nodePath}' '${e.cfg.feedScript}' run --config-dir '${e.cfg.configDir}' --uv '${e.cfg.uvPath}' ${HOWGOZIT_MARK}\n`;
+  assert.deepEqual(bothUnits(e), UNITS);
+  assert.equal(ourCronLines(e).length, 1);
+}
+
+test('R162 linux: apply under cron, then apply with systemd available, leaves exactly one job (systemd)', async () => {
+  const e = makeEnv(BOTH);
+  e.runner.st.systemd = false;
+  await apply('linux', e.cfg, e.deps);
+  assert.equal(ourCronLines(e).length, 1);
+  e.runner.st.systemd = true;
+  await apply('linux', e.cfg, e.deps);
+  assert.equal(ourCronLines(e).length, 0, 'cron line gone');
+  assert.deepEqual(bothUnits(e), UNITS, 'systemd units installed');
+  assert.equal(e.runner.st.cron, CRON_SEED, 'crontab back to the glitch-watch and unrelated lines, byte for byte');
+  bothGlitchIntact(e);
+});
+
+test('R162 linux: apply under systemd, then apply with systemd gone, leaves exactly one job (cron)', async () => {
+  const e = makeEnv(BOTH);
+  e.runner.st.systemd = true;
+  await apply('linux', e.cfg, e.deps);
+  assert.deepEqual(bothUnits(e), UNITS);
+  e.runner.st.systemd = false;
+  await apply('linux', e.cfg, e.deps);
+  assert.deepEqual(bothUnits(e), [], 'our unit files gone');
+  assert.equal(ourCronLines(e).length, 1, 'one cron line');
+  assert.ok(e.runner.st.cron.endsWith('\n'));
+  bothGlitchIntact(e);
+});
+
+for (const available of [true, false]) {
+  test(`R162 linux: remove with systemd ${available ? 'available' : 'unavailable'} removes both our cron line and our systemd units`, async () => {
+    const e = makeEnv(BOTH);
+    await installBoth(e);
+    e.runner.st.systemd = available;
+    const o = await outcome(() => remove('linux', e.cfg, e.deps));
+    assert.ok(isSuccess(o), describeOutcome(o));
+    assert.deepEqual(bothUnits(e), [], 'units gone');
+    assert.deepEqual(ourCronLines(e), [], 'cron line gone');
+    assert.equal(e.runner.st.cron, CRON_SEED, 'glitch-watch and unrelated lines byte for byte');
+    bothGlitchIntact(e);
+    assertNoGlitchInMutating(e);
+  });
+}
+
+test('R162 linux: status reports installed if either our cron line or our units exist', async () => {
+  for (const available of [true, false]) {
+    // neither
+    let e = makeEnv(BOTH);
+    e.runner.st.systemd = available;
+    assert.equal((await status('linux', e.cfg, e.deps)).installed, false, `neither, systemd ${available}`);
+    // cron only
+    e = makeEnv(BOTH);
+    e.runner.st.systemd = false;
+    await apply('linux', e.cfg, e.deps);
+    e.runner.st.systemd = available;
+    assert.equal((await status('linux', e.cfg, e.deps)).installed, true, `cron only, systemd ${available}`);
+    // units only
+    e = makeEnv(BOTH);
+    e.runner.st.systemd = true;
+    await apply('linux', e.cfg, e.deps);
+    e.runner.st.systemd = available;
+    assert.equal((await status('linux', e.cfg, e.deps)).installed, true, `units only, systemd ${available}`);
+    // both
+    e = makeEnv(BOTH);
+    await installBoth(e);
+    e.runner.st.systemd = available;
+    assert.equal((await status('linux', e.cfg, e.deps)).installed, true, `both, systemd ${available}`);
+  }
+});
+
+// ---- Finding 6: a real unload failure is not success; "already absent" is ----
+for (const code of [5, 37]) {
+  test(`R162 darwin: remove does not report success when launchctl bootout fails with ${code} while the agent is loaded`, async () => {
+    const e = makeEnv(SCENARIOS[1]);
+    await apply('darwin', e.cfg, e.deps);
+    e.runner.st.failBootout = code;
+    const o = await outcome(() => remove('darwin', e.cfg, e.deps));
+    assert.ok(!isSuccess(o), `must not report success: ${describeOutcome(o)}`);
+    assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), `installed:true or a one-sentence error: ${describeOutcome(o)}`);
+    assert.ok(e.runner.st.loaded.has('ai.blastworks.howgozit.feed'), 'still loaded in the fake');
+  });
+}
+
+test('R162 darwin: remove counts "not loaded" (113) as already absent and succeeds', async () => {
+  const e = makeEnv(SCENARIOS[1]);
+  let o = await outcome(() => remove('darwin', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `fresh machine: ${describeOutcome(o)}`);
+  await apply('darwin', e.cfg, e.deps);
+  e.runner.st.loaded.delete('ai.blastworks.howgozit.feed'); // unloaded behind our back
+  o = await outcome(() => remove('darwin', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `plist present, agent not loaded: ${describeOutcome(o)}`);
+  assertNothingOurs(e);
+});
+
+test('R162 linux-systemd: remove does not report success when systemctl --user disable --now exits 1 with the unit present', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  await apply('linux', e.cfg, e.deps);
+  e.runner.st.failDisable = true;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(!isSuccess(o), `must not report success: ${describeOutcome(o)}`);
+  assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), `installed:true or a one-sentence error: ${describeOutcome(o)}`);
+});
+
+test('R162 linux-systemd: remove counts a missing unit as already absent and succeeds', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  let o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `fresh machine: ${describeOutcome(o)}`);
+  await apply('linux', e.cfg, e.deps);
+  e.fs.files.delete('/home/tester/.config/systemd/user/howgozit-feed.timer'); // removed behind our back
+  o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `timer file already gone: ${describeOutcome(o)}`);
+  assertNothingOurs(e);
+});
+
+test('R162 win32: remove does not report success when the task still exists after Unregister', async () => {
+  const e = makeEnv(SCENARIOS[0]);
+  await apply('win32', e.cfg, e.deps);
+  e.runner.st.failUnregister = true;
+  const o = await outcome(() => remove('win32', e.cfg, e.deps));
+  assert.ok(!isSuccess(o), `must not report success: ${describeOutcome(o)}`);
+  assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), `installed:true or a one-sentence error: ${describeOutcome(o)}`);
+  assert.ok(e.runner.st.tasks.has('\\Howgozit\\Feed'), 'task still there in the fake');
+});
+
+test('R162 win32: remove counts a missing task as already absent and succeeds', async () => {
+  const e = makeEnv(SCENARIOS[0]);
+  let o = await outcome(() => remove('win32', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `fresh machine: ${describeOutcome(o)}`);
+  await apply('win32', e.cfg, e.deps);
+  e.runner.st.tasks.delete('\\Howgozit\\Feed'); // removed behind our back
+  o = await outcome(() => remove('win32', e.cfg, e.deps));
+  assert.ok(isSuccess(o), `task already gone: ${describeOutcome(o)}`);
+  assertNothingOurs(e);
 });

@@ -42,30 +42,44 @@ async function writeLocal(target, { inboxText, entry }, fs) {
 
 class Conflict extends Error {}
 class Failed extends Error {}
+class Late extends Error {}
+const LATE = 'GitHub did not answer in time; the next run catches up.';
 
-function api(target, apiBase, fetch) {
+// Settles with `work`, or rejects with Late when the signal fires first (even if the transport ignores it).
+function bound(work, signal) {
+  if (!signal) return work;
+  return new Promise((resolve, reject) => {
+    const stop = () => reject(new Late());
+    if (signal.aborted) return stop();
+    signal.addEventListener('abort', stop, { once: true });
+    work.then(resolve, (e) => (signal.aborted ? stop() : reject(e)));
+  });
+}
+
+function api(target, apiBase, fetch, signal) {
   const headers = { Authorization: `Bearer ${target.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'howgozit-feed' };
   const url = (file) => `${apiBase}/repos/${target.repo}/contents/${file}`;
   return {
     async get(file) {
-      const res = await fetch(url(file), { method: 'GET', headers });
+      const res = await bound(fetch(url(file), { method: 'GET', headers, signal }), signal);
       if (res.status === 404) return null;
       if (!res.ok) throw new Failed();
-      const j = await res.json();
+      const j = await bound(res.json(), signal);
       return { text: Buffer.from(String(j.content || ''), 'base64').toString('utf8'), sha: j.sha };
     },
     async put(file, text, message, sha) {
       const body = { message, content: Buffer.from(text, 'utf8').toString('base64') };
       if (sha) body.sha = sha;
-      const res = await fetch(url(file), { method: 'PUT', headers, body: JSON.stringify(body) });
+      const res = await bound(fetch(url(file), { method: 'PUT', headers, body: JSON.stringify(body), signal }), signal);
       if (res.status === 409 || res.status === 422) throw new Conflict();
       if (!res.ok) throw new Failed();
     },
   };
 }
 
-async function writeGithub(target, { inboxText, entry }, fetch, apiBase) {
-  const gh = api(target, apiBase, fetch);
+async function writeGithub(target, { inboxText, entry }, fetch, apiBase, deadline) {
+  const signal = typeof deadline === 'number' ? AbortSignal.timeout(Math.max(0, deadline - Date.now())) : undefined;
+  const gh = api(target, apiBase, fetch, signal);
   let wrote = false;
   try {
     const cur = await gh.get(INBOX);
@@ -77,12 +91,13 @@ async function writeGithub(target, { inboxText, entry }, fetch, apiBase) {
     return { wrote: true, line: 'inbox written' };
   } catch (e) {
     if (e instanceof Conflict) return { wrote, line: NAMED };
+    if (e instanceof Late || (signal && signal.aborted)) return { wrote, line: LATE };
     return { wrote, line: UNREACHABLE };
   }
 }
 
-export async function writeState(target, body, { fetch, fs, apiBase = 'https://api.github.com' } = {}) {
+export async function writeState(target, body, { fetch, fs, apiBase = 'https://api.github.com', deadline } = {}) {
   if (!target) return { wrote: false, line: 'no place to write the feed is set' };
   if (target.kind === 'local') return writeLocal(target, body, fs);
-  return writeGithub(target, body, fetch, apiBase);
+  return writeGithub(target, body, fetch, apiBase, deadline);
 }

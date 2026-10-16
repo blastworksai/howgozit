@@ -19,7 +19,17 @@ function checkCfg(cfg) {
   for (const k of ['nodePath', 'uvPath', 'feedScript', 'configDir']) {
     if (typeof cfg[k] !== 'string' || cfg[k] === '') throw new Error(`schedule: ${k} is required`);
   }
+  if (cfg.fixturesDir !== undefined && (typeof cfg.fixturesDir !== 'string' || cfg.fixturesDir === '')) {
+    throw new Error('schedule: fixturesDir must be a non-empty path when given');
+  }
+  for (const k of ['nodePath', 'uvPath', 'feedScript', 'configDir', 'fixturesDir']) {
+    if (typeof cfg[k] === 'string' && /[\u0000-\u001f\u007f]/.test(cfg[k])) {
+      throw new Error(`schedule: ${k} holds a line break or control character, so nothing was installed`);
+    }
+  }
 }
+
+const oneLine = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 
 function hours(cfg) {
   if (cfg.frequency === 'morning') return [MORNING_HOUR];
@@ -48,7 +58,8 @@ function unitQuote(s) {
 // ---- builders (pure) ------------------------------------------------------------------------
 
 function windowsArgument(cfg) {
-  return `"${cfg.feedScript}" run --config-dir "${cfg.configDir}" --uv "${cfg.uvPath}"`;
+  const fix = cfg.fixturesDir ? ` --fixtures "${cfg.fixturesDir}"` : '';
+  return `"${cfg.feedScript}" run --config-dir "${cfg.configDir}" --uv "${cfg.uvPath}"${fix}`;
 }
 
 function windowsTrigger(cfg) {
@@ -111,6 +122,7 @@ function plistText(cfg) {
     `    <string>${xmlEscape(cfg.configDir)}</string>\n` +
     '    <string>--uv</string>\n' +
     `    <string>${xmlEscape(cfg.uvPath)}</string>\n` +
+    (cfg.fixturesDir ? `    <string>--fixtures</string>\n    <string>${xmlEscape(cfg.fixturesDir)}</string>\n` : '') +
     '  </array>\n' +
     `  <key>StartCalendarInterval</key>\n  <array>\n${marks}\n  </array>\n` +
     '  <key>RunAtLoad</key>\n  <false/>\n' +
@@ -127,14 +139,14 @@ function systemdUnits(cfg) {
   const service =
     '[Unit]\nDescription=Howgozit feed run\n\n' +
     '[Service]\nType=oneshot\n' +
-    `ExecStart=${unitQuote(cfg.nodePath)} ${unitQuote(cfg.feedScript)} run --config-dir ${unitQuote(cfg.configDir)} --uv ${unitQuote(cfg.uvPath)}\n`;
+    `ExecStart=${unitQuote(cfg.nodePath)} ${unitQuote(cfg.feedScript)} run --config-dir ${unitQuote(cfg.configDir)} --uv ${unitQuote(cfg.uvPath)}${cfg.fixturesDir ? ` --fixtures ${unitQuote(cfg.fixturesDir)}` : ''}\n`;
   return { service, timer };
 }
 
 function cronLine(cfg) {
   const when = cfg.frequency === 'morning' ? `0 ${MORNING_HOUR} * * *` : `0 ${HOURLY_FIRST}-${HOURLY_LAST} * * *`;
   const q = (s) => cronSafe(shQuote(s));
-  return `${when} ${q(cfg.nodePath)} ${q(cfg.feedScript)} run --config-dir ${q(cfg.configDir)} --uv ${q(cfg.uvPath)} ${CRON_MARKER}`;
+  return `${when} ${q(cfg.nodePath)} ${q(cfg.feedScript)} run --config-dir ${q(cfg.configDir)} --uv ${q(cfg.uvPath)}${cfg.fixturesDir ? ` --fixtures ${q(cfg.fixturesDir)}` : ''} ${CRON_MARKER}`;
 }
 
 const lingerNote = (deps) =>
@@ -227,14 +239,55 @@ async function readCron(deps) {
   const r = await deps.run('crontab', ['-l']);
   if (r.code === 0) return String(r.stdout ?? '');
   if (/no crontab/i.test(String(r.stderr || ''))) return '';
-  throw new Error(`schedule: could not read the crontab: ${String(r.stderr || '').trim()}`);
+  throw new Error(`schedule: could not read the crontab: ${oneLine(r.stderr)}`);
 }
 
+const isOurs = (l) => l.trimEnd().endsWith(CRON_MARKER);
 const withoutOurs = (text) =>
   text
     .split('\n')
-    .filter((l) => !l.trimEnd().endsWith(CRON_MARKER))
+    .filter((l) => !isOurs(l))
     .join('\n');
+
+// Take our cron line out, leaving every other line byte for byte. A crontab that cannot be read
+// proves nothing about us, so with `lenient` it is left alone.
+async function dropCronLine(deps, lenient) {
+  let existing;
+  try {
+    existing = await readCron(deps);
+  } catch (err) {
+    if (lenient) return;
+    throw err;
+  }
+  const kept = withoutOurs(existing);
+  if (kept === existing) return;
+  await must(deps, 'crontab', ['-'], 'writing the crontab', { input: kept });
+  const after = await readCron(deps);
+  if (withoutOurs(after) !== after) {
+    throw new Error('schedule: the cron line is still in the crontab');
+  }
+}
+
+async function exists(deps, path) {
+  try {
+    await deps.fs.readFile(path);
+    return true;
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+async function dropUnitFiles(deps) {
+  const dir = unitDir(deps);
+  await deps.fs.rm(`${dir}/${UNIT}.timer`, { force: true });
+  await deps.fs.rm(`${dir}/${UNIT}.service`, { force: true });
+}
+
+async function unitsPresent(deps) {
+  const dir = unitDir(deps);
+  return (await exists(deps, `${dir}/${UNIT}.timer`)) || (await exists(deps, `${dir}/${UNIT}.service`));
+}
 
 // ---- apply ------------------------------------------------------------------------------------
 
@@ -254,11 +307,12 @@ export async function apply(osName, cfg, deps) {
     await must(deps, 'systemctl', ['--user', 'daemon-reload'], 'daemon-reload');
     await must(deps, 'systemctl', ['--user', 'enable', '--now', `${UNIT}.timer`], 'enabling the timer');
     await deps.run('systemctl', ['--user', 'try-restart', `${UNIT}.timer`]);
+    await dropCronLine(deps, true); // never leave the other backend running as well
   } else {
-    let existing = await readCron(deps);
-    existing = withoutOurs(existing);
+    let existing = withoutOurs(await readCron(deps));
     if (existing !== '' && !existing.endsWith('\n')) existing += '\n';
     await must(deps, 'crontab', ['-'], 'writing the crontab', { input: existing + p.files[0].text });
+    await dropUnitFiles(deps); // no user manager answers, so the files are all there is to remove
   }
   const out = { os: p.os, kind: p.kind, name: p.name, installed: true };
   if (p.note) out.note = p.note;
@@ -267,29 +321,51 @@ export async function apply(osName, cfg, deps) {
 
 // ---- remove -----------------------------------------------------------------------------------
 
+async function winInstalled(deps) {
+  const q = windowsQuery();
+  const r = await deps.run(q[0], q.slice(1));
+  let installed = r.code === 0;
+  try {
+    const j = JSON.parse(String(r.stdout || '').trim());
+    installed = installed && j.installed === true;
+  } catch {
+    /* keep the exit code's answer */
+  }
+  return installed;
+}
+
 export async function remove(osName, cfg, deps) {
   if (osName === 'win32') {
     await must(deps, 'powershell.exe', windowsRemoval().slice(1), 'removing the task');
+    if (await winInstalled(deps)) throw new Error('schedule: the Howgozit feed task is still registered after removal');
     return { os: osName, kind: 'schtasks', name: NAME, installed: false };
   }
   if (osName === 'darwin') {
     const id = await uid(deps);
-    await deps.run('launchctl', ['bootout', `gui/${id}/${LAUNCH_LABEL}`]); // not loaded is fine
+    const target = `gui/${id}/${LAUNCH_LABEL}`;
+    const out = await deps.run('launchctl', ['bootout', target]);
+    const still = await deps.run('launchctl', ['print', target]);
+    if (still.code === 0) {
+      throw new Error(`schedule: launchctl bootout failed (${out.code}) and the agent is still loaded: ${oneLine(out.stderr)}`);
+    }
     await deps.fs.rm(plistPath(deps), { force: true });
     return { os: osName, kind: 'launchd', name: NAME, installed: false };
   }
   if (osName === 'linux') {
     const kind = await linuxKind(deps);
+    await dropCronLine(deps, kind === 'systemd');
+    if (kind === 'systemd' && (await unitsPresent(deps))) {
+      const r = await deps.run('systemctl', ['--user', 'disable', '--now', `${UNIT}.timer`]);
+      if (r.code !== 0 && (await exists(deps, `${unitDir(deps)}/${UNIT}.timer`))) {
+        throw new Error(`schedule: systemctl disable failed (${r.code}): ${oneLine(r.stderr)}`);
+      }
+    }
+    await dropUnitFiles(deps);
+    if (kind === 'systemd') await deps.run('systemctl', ['--user', 'daemon-reload']);
+    if (await unitsPresent(deps)) throw new Error('schedule: the unit files are still on disk after removal');
     if (kind === 'systemd') {
-      const dir = unitDir(deps);
-      await deps.run('systemctl', ['--user', 'disable', '--now', `${UNIT}.timer`]);
-      await deps.fs.rm(`${dir}/${UNIT}.timer`, { force: true });
-      await deps.fs.rm(`${dir}/${UNIT}.service`, { force: true });
-      await deps.run('systemctl', ['--user', 'daemon-reload']);
-    } else {
-      const existing = await readCron(deps);
-      const kept = withoutOurs(existing);
-      if (kept !== existing) await must(deps, 'crontab', ['-'], 'writing the crontab', { input: kept });
+      const v = await deps.run('systemctl', ['--user', 'is-enabled', `${UNIT}.timer`]);
+      if (v.code === 0) throw new Error('schedule: the timer is still enabled after removal');
     }
     return { os: osName, kind, name: NAME, installed: false, note: lingerNote(deps) };
   }
@@ -300,16 +376,7 @@ export async function remove(osName, cfg, deps) {
 
 export async function status(osName, cfg, deps) {
   if (osName === 'win32') {
-    const q = windowsQuery();
-    const r = await deps.run(q[0], q.slice(1));
-    let installed = r.code === 0;
-    try {
-      const j = JSON.parse(String(r.stdout || '').trim());
-      installed = installed && j.installed === true;
-    } catch {
-      /* keep the exit code's answer */
-    }
-    return { os: osName, kind: 'schtasks', name: NAME, installed };
+    return { os: osName, kind: 'schtasks', name: NAME, installed: await winInstalled(deps) };
   }
   if (osName === 'darwin') {
     const id = await uid(deps);
@@ -317,19 +384,19 @@ export async function status(osName, cfg, deps) {
     return { os: osName, kind: 'launchd', name: NAME, installed: r.code === 0 };
   }
   if (osName === 'linux') {
-    const kind = await linuxKind(deps);
-    if (kind === 'systemd') {
-      const r = await deps.run('systemctl', ['--user', 'is-enabled', `${UNIT}.timer`]);
-      return { os: osName, kind, name: NAME, installed: r.code === 0 };
+    const probe = await linuxKind(deps);
+    let units = await unitsPresent(deps);
+    if (!units && probe === 'systemd') {
+      units = (await deps.run('systemctl', ['--user', 'is-enabled', `${UNIT}.timer`])).code === 0;
     }
-    let text = '';
+    let cron = false;
     try {
-      text = await readCron(deps);
+      cron = (await readCron(deps)).split('\n').some(isOurs);
     } catch {
-      text = '';
+      cron = false;
     }
-    const installed = text.split('\n').some((l) => l.trimEnd().endsWith(CRON_MARKER));
-    return { os: osName, kind, name: NAME, installed };
+    const kind = units && !cron ? 'systemd' : cron && !units ? 'cron' : probe;
+    return { os: osName, kind, name: NAME, installed: units || cron };
   }
   throw unsupported(osName);
 }

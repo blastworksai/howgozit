@@ -569,6 +569,134 @@ test('R163 with no feed.env and no environment, run still fails with the "Set BO
   assert.equal(fake.calls.length, 0);
 });
 
+// ---- regression tests from the cross-family review (.planning/feed-review-codex-1.md) ----
+
+// Finding 1: the board's environment (token, repo, config dir, any BOARD_*) never reaches a spawned process.
+test('R159 the env handed to every run call holds no BOARD_* variable, token included', async () => {
+  const s = await envSetup({ mailboxes: ['alpha', 'beta'], envText: 'BOARD_CONFIG_DIR=<DATA>\n' });
+  const clock = makeClock();
+  const run = okRun(clock);
+  const io = makeIo();
+  const env = { BOARD_GITHUB_TOKEN: TOKEN, BOARD_REPO: 'owner/repo', BOARD_CONFIG_DIR: s.data, BOARD_OTHER: 'x', PATH: '/usr/bin' };
+  const code = await main(['run', '--config-dir', s.cfg, '--uv', UV], bareDeps({ cfg: s.cfg, run, clock, io, env }));
+  assert.equal(code, 0, io.all());
+  assert.ok(run.calls.length >= 4);
+  for (const c of run.calls) {
+    const keys = Object.keys(c.opts?.env ?? {});
+    assert.deepEqual(keys.filter((k) => k.startsWith('BOARD_')), [], `env keys ${keys}`);
+    assert.ok(!JSON.stringify(c.opts?.env ?? {}).includes(TOKEN));
+    assert.ok(!JSON.stringify(c.argv).includes(TOKEN));
+  }
+  assert.ok(!io.all().includes(TOKEN));
+});
+
+test('R159 realRun gives its child none of the BOARD_* variables, from process.env or from opts.env', async () => {
+  const saved = { t: process.env.BOARD_GITHUB_TOKEN, d: process.env.BOARD_CONFIG_DIR };
+  process.env.BOARD_GITHUB_TOKEN = TOKEN;
+  process.env.BOARD_CONFIG_DIR = '/opt/invented/data';
+  try {
+    const probe = 'process.stdout.write(JSON.stringify([process.env.BOARD_GITHUB_TOKEN ?? null, process.env.BOARD_CONFIG_DIR ?? null, process.env.BOARD_REPO ?? null, process.env.KEEP_ME ?? null]))';
+    for (const opts of [{ timeoutMs: 10000 }, { timeoutMs: 10000, env: { BOARD_GITHUB_TOKEN: TOKEN, BOARD_REPO: 'owner/repo', KEEP_ME: 'yes' } }]) {
+      const res = await realRun([process.execPath, '-e', probe], opts);
+      assert.equal(res.code, 0);
+      const [tok, dir, repo, keep] = JSON.parse(res.stdout);
+      assert.deepEqual([tok, dir, repo], [null, null, null], 'no BOARD_* reaches the child');
+      if (opts.env) assert.equal(keep, 'yes', 'other variables still pass');
+    }
+  } finally {
+    for (const [k, v] of [['BOARD_GITHUB_TOKEN', saved.t], ['BOARD_CONFIG_DIR', saved.d]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+// Finding 2: a config label is a Glitch label, never an address or a link.
+const HOSTILE_LABELS = ['person@example.test', 'https://x.test', 'a://b', 'bad\u0007label', 'tab\tlabel', 'line\nbreak'];
+test('R163 readFeedConfig refuses a label holding @, :// or a control character with one sentence that does not echo it', async () => {
+  for (const label of HOSTILE_LABELS) {
+    const res = await readWith({ ...VALID, mailboxes: ['alpha', label] });
+    oneSentence(res);
+    assert.ok(!res.sentence.includes('@') && !/http|:\/\//i.test(res.sentence), `sentence echoes the label: ${res.sentence}`);
+  }
+  for (const label of ['Work mail', 'a-b_c', 'Privé 2']) assert.equal((await readWith({ ...VALID, mailboxes: [label] })).ok, true, label);
+});
+
+test('R163 the CLI refuses a hostile label and prints no @ or http on any path', async () => {
+  for (const verb of ['run', 'check']) {
+    for (const label of ['person@example.test', 'https://x.test']) {
+      const dir = await tmpDir();
+      await writeConfig(dir, { mailboxes: [label], frequency: 'morning', glitch: GLITCH });
+      const clock = makeClock();
+      const run = makeFakeRun({ clock });
+      const io = makeIo();
+      const code = await main([verb, '--config-dir', dir], deps({ dir, run, clock, io }));
+      assert.notEqual(code, 0);
+      assert.equal(run.calls.length, 0);
+      assert.ok(!io.all().includes('@') && !/http/i.test(io.all()), io.all());
+      assert.deepEqual((await fsp.readdir(dir)).sort(), ['feed.config.json']);
+    }
+  }
+});
+
+// Finding 7: the scheduler's uv must be an absolute path to a real executable, never a .cmd/.bat shim or a relative path.
+test('R162 schedule plan and apply refuse an explicit --uv that is a .cmd/.bat shim or a relative path, with one sentence and nothing run', async () => {
+  for (const verb of ['plan', 'apply']) {
+    for (const uv of ['/opt/invented/bin/uv.cmd', '/opt/invented/bin/UV.BAT', 'C:\\Tools\\uv.cmd', 'rel/uv', './uv', 'uv']) {
+      const s = await envSetup({});
+      const sched = [];
+      const clock = makeClock();
+      const io = makeIo();
+      const d = { ...bareDeps({ cfg: s.cfg, run: makeFakeRun({ clock }), clock, io }), osName: 'linux', scheduleRun: async (...a) => { sched.push(a); return { code: 0, stdout: '', stderr: '' }; }, user: 'invented', home: s.data };
+      const code = await main(['schedule', verb, '--config-dir', s.cfg, '--uv', uv], d);
+      assert.notEqual(code, 0, `${verb} ${uv}`);
+      assert.equal(io.lines().length, 1, `${verb} ${uv}: one sentence, got ${JSON.stringify(io.all())}`);
+      assert.equal(sched.length, 0, `${verb} ${uv}: no scheduler command ran`);
+      assert.deepEqual((await fsp.readdir(s.data)).sort(), [], `${verb} ${uv}: nothing written`);
+    }
+  }
+});
+
+test('R162 findUv never returns a relative path: a relative PATH entry is resolved to an absolute path or skipped', async () => {
+  const { findUv } = await import('../scripts/feed.mjs');
+  const root = await tmpDir();
+  const bin = path.join(root, 'bin');
+  await fsp.mkdir(bin);
+  await fsp.writeFile(path.join(bin, 'uv'), '#!/bin/sh\n');
+  await fsp.chmod(path.join(bin, 'uv'), 0o755);
+  const rel = path.relative(process.cwd(), bin);
+  assert.ok(!path.isAbsolute(rel));
+  const found = await findUv({ explicit: undefined, env: { PATH: rel }, home: root, fs: fsp });
+  assert.ok(found === null || path.isAbsolute(found), `findUv returned a relative path: ${found}`);
+  const bare = await findUv({ explicit: undefined, env: { PATH: 'bin' }, home: root, fs: fsp });
+  assert.ok(bare === null || path.isAbsolute(bare), `findUv returned a relative path: ${bare}`);
+});
+
+// Finding 8: on win32 realRun races killTree (true = the system kill worked) against 6 s; if it returns false, throws or
+// hangs, it falls back to SIGKILL on the child, so neither the child nor its pipe holds the feed open. Simulated on POSIX
+// with realRun(argv, { timeoutMs, platform: 'win32', killTree }).
+for (const [name, killTree] of [
+  ['returns false', async () => false],
+  ['throws', async () => { throw new Error('taskkill unavailable'); }],
+  ['never resolves', () => new Promise(() => {})],
+]) {
+  test(`R160 realRun on win32 still ends the child within the bound when killTree ${name}`, { skip: process.platform === 'win32', timeout: 20000 }, async () => {
+    const dir = await tmpDir();
+    const pidFile = path.join(dir, 'child.pid');
+    const script = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30000);`;
+    const t0 = Date.now();
+    const res = await realRun([process.execPath, '-e', script], { timeoutMs: 300, platform: 'win32', killTree });
+    const took = Date.now() - t0;
+    assert.equal(res.timedOut, true);
+    assert.ok(took < 7500, `resolved after ${took} ms`);
+    assert.ok(fs.existsSync(pidFile), 'the child started within the limit');
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    let gone = false;
+    for (let i = 0; i < 40 && !gone; i++) {
+      try { process.kill(pid, 0); await new Promise((r) => setTimeout(r, 50)); } catch (e) { gone = e.code === 'ESRCH'; if (!gone) throw e; }
+    }
+    if (!gone) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+    assert.ok(gone, 'the child pid is gone afterwards');
+  });
+}
+
 // ---------------- helpers ----------------
 async function tmpDir() { return fsp.mkdtemp(path.join(os.tmpdir(), 'feed-run-test-')); }
 async function writeConfig(dir, content) { await fsp.writeFile(path.join(dir, 'feed.config.json'), JSON.stringify(content)); }
