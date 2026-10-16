@@ -112,7 +112,7 @@ export function inbox(board, ui) {
         body += '<li class="thread"><span class="thread__from">' + ui.esc(t.from) + '</span>'
           + '<span class="thread__subject">' + ui.esc(t.subject) + '</span>'
           + '<div class="thread__foot">'
-          + (typeof t.account === 'string' && t.account !== '' ? '<span class="thread__account" data-account>' + ui.esc(t.account) + '</span>' : '')
+          + (typeof t.account === 'string' && t.account !== '' ? '<span class="thread__account" data-account' + (typeof t.colour === 'string' && t.colour !== '' ? ' data-colour="' + ui.esc(t.colour) + '"' : '') + '>' + ui.esc(t.account) + '</span>' : '')
           + '<span class="thread__why">' + ui.esc(t.why) + '</span>'
           + (t.draft === true ? '<span class="badge badge--accent">Draft ready</span>' : '')
           + '</div></li>';

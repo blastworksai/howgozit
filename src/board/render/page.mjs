@@ -1,7 +1,7 @@
 // The page frame: head, nonce style block, header, capture, footer, and the order of the sections (R86).
 // Pure: no clock, no file, no network, no environment. Every outside string is escaped where it is written (R73).
 import { esc, githubHref, notionHref } from '../html.mjs';
-import { themeCss } from '../theme.mjs';
+import { themeCss, mailboxVars } from '../theme.mjs';
 import { brief, season, focus, timeline } from './top.mjs';
 import { calendar, inbox, next, habits } from './mid.mjs';
 import { heatmap, projects, log, ideas, standalone } from './low.mjs';
@@ -192,7 +192,9 @@ export function renderPage(board, theme, { styleNonce, formToken } = {}) {
 
   const css = themeCss(theme);
   const rules = [];
-  rules.push(':root{' + Object.entries(css.vars).map(([k, v]) => `${k}:${v};`).join('') + '}');
+  const inboxThreads = Array.isArray(b.panels?.inbox?.threads) ? b.panels.inbox.threads : [];
+  const mbx = mailboxVars(inboxThreads.map((t) => t?.colour).filter((c) => typeof c === 'string'));
+  rules.push(':root{' + Object.entries({ ...css.vars, ...mbx }).map(([k, v]) => `${k}:${v};`).join('') + '}');
   for (const [key, p] of projectByKey) {
     if (isHex(p.color)) rules.push(`.pc-${key}{--pc:${p.color}}`);
   }

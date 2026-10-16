@@ -9,6 +9,8 @@ const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const FORBIDDEN = new Set(['token', 'secret', 'password']);
 const MAX_DEPTH = 50;
 
+const MAILBOX_COLOURS = ['green', 'amber', 'orange', 'charcoal', 'blue', 'purple', 'red', 'grey'];
+
 function deepFreeze(o) {
   for (const v of Object.values(o)) {
     if (v && typeof v === 'object') deepFreeze(v);
@@ -315,6 +317,18 @@ export function withDefaults(settings, warn) {
     ...refresh,
     dailyAt: soft(refresh.dailyAt, (v) => typeof v === 'string' && TIME_RE.test(v), '05:00', 'refresh.dailyAt'),
   };
+
+  // R164: label -> one of eight colours; a non-object block is dropped, bad entries are dropped.
+  if (out.mailboxes !== undefined) {
+    if (!isObj(out.mailboxes)) { delete out.mailboxes; w('setting-invalid', 'mailboxes'); }
+    else {
+      const kept = {};
+      for (const [k, v] of Object.entries(out.mailboxes)) {
+        if (isStr(v) && MAILBOX_COLOURS.includes(v)) kept[k] = v; // a bad entry is dropped quietly: the plain tag shows
+      }
+      out.mailboxes = kept;
+    }
+  }
 
   // CP4 soft keys (absent changes nothing; present and wrong is dropped and counted once).
   if (out.modes !== undefined) {

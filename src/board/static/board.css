@@ -475,6 +475,14 @@ form { margin: 0; }
 .thread__subject { font-size: 14px; color: var(--soft); }
 .thread__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .thread__account { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-right: 4px; }
+.thread__account[data-colour="green"] { background: var(--mbx-green); color: var(--mbx-green-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="amber"] { background: var(--mbx-amber); color: var(--mbx-amber-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="orange"] { background: var(--mbx-orange); color: var(--mbx-orange-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="charcoal"] { background: var(--mbx-charcoal); color: var(--mbx-charcoal-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="blue"] { background: var(--mbx-blue); color: var(--mbx-blue-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="purple"] { background: var(--mbx-purple); color: var(--mbx-purple-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="red"] { background: var(--mbx-red); color: var(--mbx-red-ink); padding: 1px 6px; border-radius: var(--r-pill); }
+.thread__account[data-colour="grey"] { background: var(--mbx-grey); color: var(--mbx-grey-ink); padding: 1px 6px; border-radius: var(--r-pill); }
 .thread__why { font-size: 12.5px; color: var(--muted); }
 
 /* ---------- what's next ---------- */

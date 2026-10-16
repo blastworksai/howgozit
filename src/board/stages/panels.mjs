@@ -38,11 +38,27 @@ export function proposalsStale(ctx) {
   return olderThanDay(p.updated, ctx.now);
 }
 
-function thread(t) {
+function thread(t, colours) {
   const out = { bucket: t.bucket, from: t.from, subject: t.subject, why: t.why };
   if (t.draft !== undefined) out.draft = t.draft;
   const account = accountWord(t.account);
-  if (account !== null) out.account = account;
+  if (account !== null) {
+    out.account = account;
+    if (Object.hasOwn(colours, account)) out.colour = colours[account];
+  }
+  return out;
+}
+
+const MBX_COLOURS = ['green', 'amber', 'orange', 'charcoal', 'blue', 'purple', 'red', 'grey'];
+
+// R164: the settings map keyed by R117-cleaned label; unknown colours and unusable labels are left out.
+function mailboxColours(m) {
+  const out = Object.create(null);
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) return out;
+  for (const [k, v] of Object.entries(m)) {
+    const key = accountWord(k);
+    if (key !== null && typeof v === 'string' && MBX_COLOURS.includes(v) && !Object.hasOwn(out, key)) out[key] = v;
+  }
   return out;
 }
 
@@ -85,7 +101,7 @@ const BUILDERS = {
     return {
       stale: olderThanDay(v.updated, ctx.now),
       counts: v.counts,
-      threads: v.threads.filter((t) => BUCKETS.includes(t.bucket)).slice(0, MAX_THREADS).map(thread),
+      threads: v.threads.filter((t) => BUCKETS.includes(t.bucket)).slice(0, MAX_THREADS).map((t) => thread(t, mailboxColours(ctx.settings?.mailboxes))),
     };
   },
   log(v) {

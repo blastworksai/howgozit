@@ -92,6 +92,30 @@ const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 const WEIGHTS = { heading: 'wght@800', body: 'wght@400;500;600', mono: 'wght@400;500' };
 const FALLBACK = { heading: 'system-ui, sans-serif', body: 'system-ui, sans-serif', mono: 'ui-monospace, monospace' };
 
+// R164: mailbox pill colours. Fill and ink are a fixed pair, each at least 4.5:1, so a pill is legible on any theme.
+export const MAILBOX_COLOURS = {
+  green: { fill: '#1E7A4F', ink: '#FFFFFF' },
+  amber: { fill: '#F2B632', ink: '#1F1500' },
+  orange: { fill: '#B84F0B', ink: '#FFFFFF' },
+  charcoal: { fill: '#3A3F45', ink: '#FFFFFF' },
+  blue: { fill: '#2F5FB3', ink: '#FFFFFF' },
+  purple: { fill: '#6B46B0', ink: '#FFFFFF' },
+  red: { fill: '#B3321F', ink: '#FFFFFF' },
+  grey: { fill: '#6B7178', ink: '#FFFFFF' },
+};
+
+// The custom properties of the given mailbox colours, in the table's order; unknown names are ignored.
+export function mailboxVars(colours) {
+  const want = new Set(colours);
+  const out = {};
+  for (const [c, p] of Object.entries(MAILBOX_COLOURS)) {
+    if (!want.has(c)) continue;
+    out['--mbx-' + c] = p.fill;
+    out['--mbx-' + c + '-ink'] = p.ink;
+  }
+  return out;
+}
+
 export function themeCss(theme) {
   const t = isObj(theme) ? theme : {};
   const colors = own(t, 'colors');
