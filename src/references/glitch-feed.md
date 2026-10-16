@@ -81,5 +81,7 @@ On a Notion board the job must run on the computer that runs the board.
 
 ## What has been run on a real machine
 
-So far only tests with stand-ins: no real Glitch, no real mailbox, no real scheduler.
-Linux, macOS and Windows real-machine runs have not been done yet.
+On 16 October 2026:
+- **Linux (one machine, a systemd user timer):** the feed ran against a real Glitch with four real Gmail mailboxes and wrote a real GitHub board, by hand and then started by systemd; its first run on its own schedule is the morning of 17 October.
+- **macOS (one Mac, a LaunchAgent) and Windows (one PC, Task Scheduler):** the job was installed, started once, read, removed and checked gone, both "each morning" and "every hour", with stand-in mail through `--fixtures` and a folder whose name holds a space. No real mail was read on either, and Glitch itself was not called there.
+- Not yet run anywhere: Outlook or Microsoft 365 mailboxes (none was connected), a Notion board, and the cron fallback on Linux.
