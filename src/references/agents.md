@@ -69,6 +69,8 @@ Then add one entry to state/log.json.
 
 ## inbox
 
+Running inside Glitch? Its own mail feed fills this panel without an agent: see `glitch-feed.md`.
+
 **What it is for.** It sorts new mail into three groups so the person sees at a glance what needs them.
 
 **When it runs.** Every 30 minutes during the day, for example 06:00 to 22:00.

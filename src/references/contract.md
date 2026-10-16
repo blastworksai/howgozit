@@ -1006,7 +1006,9 @@ It holds `mailboxes` (1 to 10 Glitch labels), `frequency` (`morning` or `hourly`
 It is never written to the data repo.
 An invalid file stops the run with one plain sentence and writes nothing.
 `feed.mjs run|check --fixtures <dir>` replaces every Glitch call with `<dir>/health.json` (the two doctors' answers) and `<dir>/triage-<label>.json`, to prove the scheduler on a machine without Glitch.
-Check: valid, missing and each invalid field; with `--fixtures` no Glitch process is spawned and the answers come from the folder.
+Beside it, `feed.env` may hold `BOARD_REPO`, `BOARD_GITHUB_TOKEN` and `BOARD_CONFIG_DIR` as `KEY=VALUE` lines, for the scheduled job, which starts with none of the board's environment; no other key is read, and a variable already in the environment wins over the file.
+On macOS and Linux a `feed.env` that its group or others can read stops the run with one plain sentence, and the token is never printed.
+Check: valid, missing and each invalid field; with `--fixtures` no Glitch process is spawned and the answers come from the folder. With an empty environment and a `feed.env` the run reads its keys; the environment wins over the file; an unknown key (`PATH`, `NODE_OPTIONS`) is ignored and never reaches a spawned process; comments and blank lines are ignored; a `feed.env` readable by group or others stops the run with one sentence and writes nothing; the token appears in no printed line on any path.
 
 **R164. A mailbox may have a colour.**
 Board settings may carry `mailboxes: { "<label>": "<colour>" }`, the colour one of `green`, `amber`, `orange`, `charcoal`, `blue`, `purple`, `red` or `grey`.

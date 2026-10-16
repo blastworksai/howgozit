@@ -8,7 +8,7 @@ import { constants } from 'node:fs';
 import os from 'node:os';
 import { resolve, join, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readFeedConfig } from '../feed/config.mjs';
+import { readFeedConfig, readFeedEnv } from '../feed/config.mjs';
 import { readMailboxes, realRun } from '../feed/doors.mjs';
 import { buildInbox, dump, logEntry } from '../feed/map.mjs';
 import { targetFrom, writeState } from '../feed/write.mjs';
@@ -99,7 +99,12 @@ export async function main(argv, deps) {
     }
 
     const mode = verb === 'check' ? 'check' : 'run';
-    const target = verb === 'run' ? targetFrom(env) : null;
+    let target = null;
+    if (verb === 'run') {
+      const fe = await readFeedEnv(configDir, { fs, env });
+      if (!fe.ok) return fail(fe.sentence);
+      target = targetFrom(fe.env);
+    }
     if (verb === 'run' && !target) return fail('Set BOARD_CONFIG_DIR, or BOARD_REPO with BOARD_GITHUB_TOKEN, so the feed knows where to write.');
 
     const res = await readMailboxes({ ...config, uv: uv || 'uv' }, { run, clock, mode, fixturesDir: fixturesDir ? resolve(cwd, fixturesDir) : undefined, fs });

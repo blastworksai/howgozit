@@ -86,6 +86,7 @@ It's built to grow and learn with you.
 Howgozit was made on Glitch and for it, so setting it up should feel like adding a skill.
 You tell Glitch you want a board, it walks you through a short interview, and your board is up.
 Glitch can also feed the agent panels: the morning brief, today's calendar, your inbox sorted into reply, decide and FYI, and a log of what it did for you (how, in [`src/references/agents.md`](src/references/agents.md)).
+Glitch can also put your inbox on the board by itself: Gmail and Outlook, sender and subject only, never the text (see [`src/references/glitch-feed.md`](src/references/glitch-feed.md)). Calendar through Glitch comes later.
 
 No Glitch? Any agent works, and so does no agent at all.
 

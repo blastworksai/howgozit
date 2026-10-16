@@ -232,6 +232,33 @@ Five optional agents can write a morning brief, sort the inbox, read the calenda
 Describe this in one sentence. Ask whether they want to hear more. If yes, follow `references/agents.md`. If no, drop it.
 Never switch one on unasked. Never store email bodies, only subjects and titles.
 
+#### The Glitch mail feed (only when you are running inside Glitch)
+
+A member running inside Glitch (detection in Step 1) has a second, simpler road for the inbox panel: a small job of Howgozit's own that reads their mail through Glitch's inbox rules. It is not one of the five agents. Details: `references/glitch-feed.md`.
+
+Offer it once, during setup, in these words or close: "Glitch can put your mail on the board: who wrote and the subject, never the text. Want that?" Never switch it on unasked. If they say "feed my inbox" later, start the same walk here.
+
+On a no, drop it. On a yes, one question at a time:
+
+1. List their Glitch mail accounts with two commands, run in the Glitch folder. Keep Google rows whose `surfaces` include `gmail`. Keep Microsoft rows only when `enabled` is true.
+   `uv run --directory <Glitch folder>/.claude/scripts python integrations/connections.py doctor`
+   `uv run --directory <Glitch folder>/.claude/scripts python integrations/ms_connections.py doctor`
+   Show the labels only. Never show or write an address (`login`).
+2. "Which of these should go on the board?" One to ten. Use the labels exactly as Glitch shows them.
+3. For each one: "Which colour for <label>?" From green, amber, orange, charcoal, blue, purple, red, grey.
+4. "Each morning, or every hour during the day?" Each morning (06:00) is the default; every hour means 07:00 to 22:00, your computer's time.
+5. Write two files in the board's config folder. That is the folder the settings file `board.config.json` sits in: `./config/` in this skill's folder, or the `--config-dir` folder if setup used one. Say which path you used.
+   `feed.config.json` holds `mailboxes` (the chosen labels), `frequency` (`morning` or `hourly`) and `glitch` (the absolute path of the Glitch folder). It stays on this computer and is never put in the GitHub data repository.
+   `board.config.json` gets a `mailboxes` block of label to colour, for example `"mailboxes": {"personal": "green"}`. Add it to the file setup already wrote and change nothing else in it. The colours show once the board is restarted.
+   Also write `feed.env` in the same folder with the board's target, one `KEY=VALUE` per line: `BOARD_REPO=<owner/name>` for a GitHub board, or `BOARD_CONFIG_DIR=<config folder>` for a Notion board. The scheduled job reads only this file, not the terminal. For a GitHub board the member types the line `BOARD_GITHUB_TOKEN=...` into the file themselves, in their own editor or terminal; never ask for the token in the chat. On macOS and Linux have them run `chmod 600 <config folder>/feed.env`, or the run stops. On Windows, say the file sits in their own config folder under their user profile.
+6. Run `node <skill folder>/scripts/feed.mjs check --config-dir <config folder>`. Say first that the very first read of a mailbox can take a few minutes, once, because Glitch looks back over a year of sent mail. Show the headline and any line about a mailbox that was skipped. Nothing is written by `check`.
+7. Run `feed.mjs schedule plan` with the same flag and show what it would install. Ask for ONE yes to install it. Then `feed.mjs schedule apply`.
+   On Linux, show the member the linger line the command prints and let them run it themselves; it needs sudo.
+   On a Notion board, say the job must run on the same computer that runs the board.
+8. Say plainly: each run uses Glitch's inbox rules, so Glitch may suggest new people from that mail, as it does in a session. They can stop it any time with `feed.mjs schedule remove`.
+
+Only mail goes through this road. The calendar through Glitch comes later.
+
 ### The iCloud calendar (optional)
 
 The board can read today's events from the person's own iCloud calendars, only the calendars they name. It needs no agent.

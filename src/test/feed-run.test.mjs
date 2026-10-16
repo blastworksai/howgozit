@@ -459,6 +459,116 @@ test('R163 run with BOARD_CONFIG_DIR and no --config-dir reads the config there,
   for (const c of run.calls) assert.equal(c.timeoutMs, 60000);
 });
 
+// ---- feed.env (amendment A5): the scheduled job starts with none of the board's environment ----
+const TOKEN = 'secret-token-xyz';
+async function envSetup({ envText, mode = 0o600, mailboxes = ['alpha-box', 'beta-box'] }) {
+  const cfg = await tmpDir();
+  const data = await tmpDir();
+  await writeConfig(cfg, { mailboxes, frequency: 'morning', glitch: GLITCH });
+  if (envText !== undefined) {
+    const p = path.join(cfg, 'feed.env');
+    await fsp.writeFile(p, envText.replaceAll('<DATA>', data));
+    await fsp.chmod(p, mode);
+  }
+  return { cfg, data };
+}
+const bareDeps = ({ cfg, run, clock, io, env = {} }) => ({ env, fetch: async () => { throw new Error('no network in these tests'); }, cwd: cfg, out: io.out, err: io.err, run, fs: fsp, clock });
+const runEnv = async (argv, setup, { env = {}, run } = {}) => {
+  const clock = makeClock();
+  const fake = run ?? makeFakeRun({ clock });
+  const io = makeIo();
+  const code = await main(argv, bareDeps({ cfg: setup.cfg, run: fake, clock, io, env }));
+  return { code, io, fake };
+};
+
+test('R163 with an empty environment, feed.env supplies BOARD_CONFIG_DIR and a --fixtures run writes state/inbox.json there', async () => {
+  const s = await envSetup({ envText: 'BOARD_CONFIG_DIR=<DATA>\n' });
+  const { code, io, fake } = await runEnv(['run', '--config-dir', s.cfg, '--fixtures', FIXTURES], s);
+  assert.equal(code, 0, io.all());
+  assert.equal(fake.calls.length, 0);
+  assert.ok(fs.existsSync(path.join(s.data, 'state', 'inbox.json')));
+  assert.ok(!fs.existsSync(path.join(s.cfg, 'state')), 'nothing lands beside the config unless the file said so');
+});
+
+test('R163 a variable already in the environment wins over feed.env', async () => {
+  const s = await envSetup({ envText: 'BOARD_CONFIG_DIR=<DATA>\n' });
+  const other = await tmpDir();
+  const { code, io } = await runEnv(['run', '--config-dir', s.cfg, '--fixtures', FIXTURES], s, { env: { BOARD_CONFIG_DIR: other } });
+  assert.equal(code, 0, io.all());
+  assert.ok(fs.existsSync(path.join(other, 'state', 'inbox.json')));
+  assert.ok(!fs.existsSync(path.join(s.data, 'state')), 'the file\'s value was not used');
+});
+
+test('R163 an unknown key in feed.env is ignored and never reaches a spawned process', async () => {
+  const s = await envSetup({
+    mailboxes: ['alpha', 'beta'],
+    envText: 'PATH=/evil\nNODE_OPTIONS=--require=/evil/x.js\nEVIL_KEY=evil-value\nBOARD_CONFIG_DIR=<DATA>\n',
+  });
+  const clock = makeClock();
+  const run = okRun(clock);
+  const io = makeIo();
+  const code = await main(['run', '--config-dir', s.cfg, '--uv', UV], bareDeps({ cfg: s.cfg, run, clock, io, env: { PATH: '/usr/bin', HOME: '/home/invented' } }));
+  assert.equal(code, 0, io.all());
+  assert.ok(fs.existsSync(path.join(s.data, 'state', 'inbox.json')), 'the allowed key was still read');
+  assert.ok(run.calls.length >= 4);
+  for (const c of run.calls) {
+    const blob = JSON.stringify([c.argv, c.opts?.env ?? null]);
+    assert.ok(!blob.includes('/evil') && !blob.includes('NODE_OPTIONS') && !blob.includes('EVIL_KEY') && !blob.includes('evil-value'), blob);
+    if (c.opts?.env?.PATH !== undefined) assert.equal(c.opts.env.PATH, '/usr/bin');
+  }
+  assert.ok(!io.all().includes('/evil'));
+});
+
+test('R163 feed.env comments, blank lines and surrounding spaces are ignored', async () => {
+  const s = await envSetup({ envText: '# the feed\'s own settings\n\n   \n# BOARD_CONFIG_DIR=/nowhere/commented\nBOARD_CONFIG_DIR=<DATA>\n\n# end\n' });
+  const { code, io } = await runEnv(['run', '--config-dir', s.cfg, '--fixtures', FIXTURES], s);
+  assert.equal(code, 0, io.all());
+  assert.ok(fs.existsSync(path.join(s.data, 'state', 'inbox.json')));
+});
+
+test('R163 a feed.env that group or others can read stops the run with one sentence and writes nothing (POSIX only)', { skip: process.platform === 'win32' }, async () => {
+  for (const mode of [0o644, 0o640, 0o604]) {
+    const s = await envSetup({ envText: `BOARD_CONFIG_DIR=<DATA>\nBOARD_GITHUB_TOKEN=${TOKEN}\n`, mode });
+    const before = (await fsp.readdir(s.cfg)).sort();
+    const { code, io, fake } = await runEnv(['run', '--config-dir', s.cfg, '--fixtures', FIXTURES], s);
+    assert.notEqual(code, 0, `mode ${mode.toString(8)}`);
+    assert.equal(io.lines().length, 1, `one sentence, got ${JSON.stringify(io.all())}`);
+    assert.ok(io.all().includes('feed.env') && !io.all().includes('Set BOARD_CONFIG_DIR'), `the sentence is about feed.env: ${io.all()}`);
+    assert.deepEqual((await fsp.readdir(s.cfg)).sort(), before);
+    assert.deepEqual(await fsp.readdir(s.data), [],'nothing written to the data folder');
+    assert.equal(fake.calls.length, 0);
+    assert.ok(!io.all().includes(TOKEN));
+  }
+});
+
+test('R163 the token in feed.env appears in no printed line: success, bad mode and missing repo', async () => {
+  const good = await envSetup({ envText: `BOARD_CONFIG_DIR=<DATA>\nBOARD_GITHUB_TOKEN=${TOKEN}\n` });
+  const ok = await runEnv(['run', '--config-dir', good.cfg, '--fixtures', FIXTURES], good);
+  assert.equal(ok.code, 0, ok.io.all());
+  assert.ok(!ok.io.all().includes(TOKEN), 'success path');
+  if (process.platform !== 'win32') {
+    const bad = await envSetup({ envText: `BOARD_CONFIG_DIR=<DATA>\nBOARD_GITHUB_TOKEN=${TOKEN}\n`, mode: 0o644 });
+    const r = await runEnv(['run', '--config-dir', bad.cfg, '--fixtures', FIXTURES], bad);
+    assert.notEqual(r.code, 0);
+    assert.ok(!r.io.all().includes(TOKEN), 'bad-mode path');
+  }
+  const noRepo = await envSetup({ envText: `BOARD_GITHUB_TOKEN=${TOKEN}\n` });
+  const m = await runEnv(['run', '--config-dir', noRepo.cfg, '--fixtures', FIXTURES], noRepo);
+  assert.notEqual(m.code, 0);
+  assert.ok(!m.io.all().includes(TOKEN), 'missing-repo path');
+  assert.deepEqual((await fsp.readdir(noRepo.cfg)).sort(), ['feed.config.json', 'feed.env']);
+});
+
+test('R163 with no feed.env and no environment, run still fails with the "Set BOARD_CONFIG_DIR" sentence and writes nothing', async () => {
+  const s = await envSetup({});
+  const { code, io, fake } = await runEnv(['run', '--config-dir', s.cfg, '--fixtures', FIXTURES], s);
+  assert.notEqual(code, 0);
+  assert.equal(io.lines().length, 1);
+  assert.ok(io.all().includes('Set BOARD_CONFIG_DIR'), io.all());
+  assert.deepEqual((await fsp.readdir(s.cfg)).sort(), ['feed.config.json']);
+  assert.equal(fake.calls.length, 0);
+});
+
 // ---------------- helpers ----------------
 async function tmpDir() { return fsp.mkdtemp(path.join(os.tmpdir(), 'feed-run-test-')); }
 async function writeConfig(dir, content) { await fsp.writeFile(path.join(dir, 'feed.config.json'), JSON.stringify(content)); }
