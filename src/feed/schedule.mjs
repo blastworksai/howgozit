@@ -283,6 +283,9 @@ async function dropUnitFiles(deps) {
   await deps.fs.rm(`${dir}/${UNIT}.service`, { force: true });
 }
 
+const MANAGER_SILENT =
+  'The user service manager does not answer, so the feed job was left as it is; try again in a normal login session.';
+
 async function unitsPresent(deps) {
   const dir = unitDir(deps);
   return (await exists(deps, `${dir}/${UNIT}.timer`)) || (await exists(deps, `${dir}/${UNIT}.service`));
@@ -293,6 +296,7 @@ async function unitsPresent(deps) {
 export async function apply(osName, cfg, deps) {
   const p = await plan(osName, cfg, deps);
   // On linux read the crontab before anything changes: an unreadable one refuses the whole apply.
+  if (p.kind === 'cron' && (await unitsPresent(deps))) throw new Error(MANAGER_SILENT);
   const cronBefore = osName === 'linux' ? await readCron(deps) : '';
   if (p.kind === 'schtasks') {
     await must(deps, p.commands[0][0], p.commands[0].slice(1), 'registering the task');
@@ -354,6 +358,7 @@ export async function remove(osName, cfg, deps) {
   }
   if (osName === 'linux') {
     const kind = await linuxKind(deps);
+    if (kind === 'cron' && (await unitsPresent(deps))) throw new Error(MANAGER_SILENT);
     const cronBefore = await readCron(deps); // unreadable: refuse before any change
     if (kind === 'systemd' && (await unitsPresent(deps))) {
       const r = await deps.run('systemctl', ['--user', 'disable', '--now', `${UNIT}.timer`]);
@@ -370,7 +375,9 @@ export async function remove(osName, cfg, deps) {
       if (v.code === 0) throw new Error('schedule: the timer is still enabled after removal');
       for (const u of [`${UNIT}.timer`, `${UNIT}.service`]) {
         const a = await deps.run('systemctl', ['--user', 'is-active', u]);
-        if (a.code === 0) throw new Error(`schedule: ${u} is still active after removal`);
+        if (a.code !== 3 && a.code !== 4) {
+          throw new Error(`schedule: ${u} is not confirmed stopped after removal (is-active ${a.code})`);
+        }
       }
     }
     return { os: osName, kind, name: NAME, installed: false, note: lingerNote(deps) };

@@ -112,6 +112,7 @@ function makeRunner(world, fs) {
     failUnregister: false, // win32: howgozit task cannot be removed
     cronListFail: false, // crontab -l exits 1 with 'crontab: cannot open' (not 'no crontab for')
     failPrint: null, // darwin: exit code of launchctl print|list for a howgozit label
+    isActiveCode: null, // systemd: exit code of is-active for a howgozit unit (3 inactive, 4 no such unit, 1 bus error)
     stayActive: false, // systemd: is-active howgozit-feed.timer answers active even after disable
     tasks: new Map(world === 'win32' ? [[WIN_GLITCH, WIN_GLITCH_SPEC]] : []),
     loaded: new Set(world === 'darwin' ? ['com.glitch.watch'] : []),
@@ -128,6 +129,7 @@ function makeRunner(world, fs) {
       const a = call.args.filter((x) => x !== '--user');
       if (a[0] === 'show-environment') return st.systemd ? ok('HOME=/home/tester\n') : bad(1, 'Failed to connect to bus');
       if (!st.systemd) return bad(1, 'Failed to connect to bus'); // no user manager: every other verb fails too
+      if (a[0] === 'is-active' && st.isActiveCode !== null) return st.isActiveCode === 0 ? ok('active\n') : bad(st.isActiveCode, st.isActiveCode === 1 ? 'Failed to connect to bus' : 'inactive');
       if (a[0] === 'is-active' && st.stayActive) return ok('active\n');
       if (a[0] === 'is-active' && !fs.files.has(timerPath)) return bad(3, 'inactive');
       if (['is-enabled', 'is-active', 'status', 'cat', 'show', 'list-timers'].includes(a[0])) {
@@ -862,20 +864,7 @@ test('R162 linux: apply under cron, then apply with systemd available, leaves ex
   bothGlitchIntact(e);
 });
 
-test('R162 linux: apply under systemd, then apply with systemd gone, leaves exactly one job (cron)', async () => {
-  const e = makeEnv(BOTH);
-  e.runner.st.systemd = true;
-  await apply('linux', e.cfg, e.deps);
-  assert.deepEqual(bothUnits(e), UNITS);
-  e.runner.st.systemd = false;
-  await apply('linux', e.cfg, e.deps);
-  assert.deepEqual(bothUnits(e), [], 'our unit files gone');
-  assert.equal(ourCronLines(e).length, 1, 'one cron line');
-  assert.ok(e.runner.st.cron.endsWith('\n'));
-  bothGlitchIntact(e);
-});
-
-for (const available of [true, false]) {
+for (const available of [true]) { // unavailable manager + our units now refuses (round 3), see the tests at the end
   test(`R162 linux: remove with systemd ${available ? 'available' : 'unavailable'} removes both our cron line and our systemd units`, async () => {
     const e = makeEnv(BOTH);
     await installBoth(e);
@@ -1153,4 +1142,81 @@ test('R162 linux-systemd: remove checks is-active as well as is-enabled after di
   assert.ok(after.slice(d + 1).some((a) => /^is-active\b.*howgozit-feed/.test(a)), `is-active asked after disable: ${after.join(' | ')}`);
   assert.ok(!isSuccess(o), `an active timer is not success: ${describeOutcome(o)}`);
   assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), describeOutcome(o));
+});
+
+// ---------------------------------------------------------------------------
+// Review round 3 (findings 5 and 6). Lead rule: our unit files exist and the user manager does not
+// answer -> apply (to cron) and remove refuse with one sentence and change nothing. After
+// `disable --now` only is-active exit 3 (inactive) or 4 (no such unit) counts as stopped.
+// Superseded by this rule and removed/narrowed above: "apply under systemd, then apply with
+// systemd gone ... (cron)" and "remove with systemd unavailable removes both".
+// Fake switch: st.isActiveCode (exit code of `is-active` for a howgozit unit).
+// ---------------------------------------------------------------------------
+async function unitsPresentManagerGone() {
+  const e = makeEnv(BOTH);
+  e.runner.st.systemd = true;
+  await apply('linux', e.cfg, e.deps);
+  assert.deepEqual(bothUnits(e), UNITS);
+  e.runner.st.systemd = false;
+  return e;
+}
+
+test('R162 linux: units present and manager unreachable, apply refuses, keeps the unit files and leaves the crontab unchanged', async () => {
+  const e = await unitsPresentManagerGone();
+  const before = worldSnapshot(e);
+  const mutBefore = e.runner.mutating().length;
+  const o = await outcome(() => apply('linux', e.cfg, e.deps));
+  assert.ok(isFailure(o), `expected a one-sentence refusal, got ${describeOutcome(o)}`);
+  assert.equal(worldSnapshot(e), before, 'units, files and crontab unchanged');
+  assert.deepEqual(bothUnits(e), UNITS, 'unit files kept');
+  assert.equal(e.runner.st.cron, CRON_SEED, 'crontab unchanged');
+  assert.equal(e.runner.mutating().length, mutBefore, 'no crontab write, no systemctl change');
+  bothGlitchIntact(e);
+});
+
+test('R162 linux: units present and manager unreachable, remove refuses and changes nothing', async () => {
+  const e = await unitsPresentManagerGone();
+  const before = worldSnapshot(e);
+  const mutBefore = e.runner.mutating().length;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(isFailure(o), `expected a one-sentence refusal, got ${describeOutcome(o)}`);
+  assert.equal(worldSnapshot(e), before, 'units, files and crontab unchanged');
+  assert.equal(e.runner.mutating().length, mutBefore, 'no crontab write, no systemctl change');
+});
+
+test('R162 linux-systemd: after disable --now, is-active exiting 1 (cannot reach the bus) is not success', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  await apply('linux', e.cfg, e.deps);
+  e.runner.st.isActiveCode = 1;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(!isSuccess(o), `must not report success: ${describeOutcome(o)}`);
+  assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), describeOutcome(o));
+});
+
+test('R162 linux-systemd: after disable --now, is-active exiting 3 (inactive) is success', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  await apply('linux', e.cfg, e.deps);
+  e.runner.st.isActiveCode = 3;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(isSuccess(o), describeOutcome(o));
+  assertNothingOurs(e);
+});
+
+test('R162 linux-systemd: after disable --now, is-active exiting 4 (no such unit) is success', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  await apply('linux', e.cfg, e.deps);
+  e.runner.st.isActiveCode = 4;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  assert.ok(isSuccess(o), describeOutcome(o));
+  assertNothingOurs(e);
+});
+
+test('R162 linux: no units and manager unreachable, apply installs the cron line as before', async () => {
+  const e = makeEnv(BOTH);
+  e.runner.st.systemd = false;
+  const o = await outcome(() => apply('linux', e.cfg, e.deps));
+  assert.ok(!isFailure(o), describeOutcome(o));
+  assert.equal(ourCronLines(e).length, 1);
+  assert.deepEqual(bothUnits(e), []);
+  bothGlitchIntact(e);
 });

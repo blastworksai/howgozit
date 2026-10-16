@@ -740,6 +740,22 @@ test('R162 stableNodePath returns /usr/local/bin/node when only it matches', asy
   assert.equal(await stable(cellar, { [cellar]: cellar, '/usr/local/bin/node': cellar }), '/usr/local/bin/node', 'a missing /opt/homebrew/bin/node is skipped');
 });
 
+test('R162 stableNodePath names a versioned formula by its <prefix>/opt/<formula> link when that matches', async () => {
+  const c = '/opt/homebrew/Cellar/node@22/22.11.0/bin/node';
+  assert.equal(await stable(c, { [c]: c, '/opt/homebrew/opt/node@22/bin/node': c, '/opt/homebrew/bin/node': '/opt/homebrew/Cellar/node/26.0.0/bin/node' }), '/opt/homebrew/opt/node@22/bin/node');
+});
+
+test('R162 stableNodePath uses <prefix>/opt/node for a /usr/local Cellar node, ahead of <prefix>/bin/node', async () => {
+  const c = '/usr/local/Cellar/node/26.0.0/bin/node';
+  assert.equal(await stable(c, { [c]: c, '/usr/local/opt/node/bin/node': c, '/usr/local/bin/node': c }), '/usr/local/opt/node/bin/node');
+});
+
+test('R162 stableNodePath falls back to <prefix>/bin/node when the opt link is absent or points elsewhere', async () => {
+  const c = '/opt/homebrew/Cellar/node@22/22.11.0/bin/node';
+  assert.equal(await stable(c, { [c]: c, '/opt/homebrew/opt/node@22/bin/node': '/elsewhere/node', '/opt/homebrew/bin/node': c }), '/opt/homebrew/bin/node');
+  assert.equal(await stable(c, { [c]: c, '/opt/homebrew/bin/node': '/elsewhere/node' }), c);
+});
+
 test('R162 stableNodePath returns execPath unchanged when neither link matches', async () => {
   assert.equal(await stable(CELLAR, { [CELLAR]: CELLAR, '/opt/homebrew/bin/node': '/elsewhere/node', '/usr/local/bin/node': '/other/node' }), CELLAR);
   assert.equal(await stable(CELLAR, { [CELLAR]: CELLAR }), CELLAR);

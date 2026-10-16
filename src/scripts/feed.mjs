@@ -57,11 +57,15 @@ function commandRun(cmd, args, { input } = {}) {
 
 // A Homebrew Node is baked by its stable link, never by the versioned Cellar folder.
 export async function stableNodePath(execPath, { fs, platform } = {}) {
-  if (!String(execPath).includes('/Cellar/node')) return execPath;
+  const m = /^(.*)\/Cellar\/([^/]+)\/[^/]+\/bin\/node$/.exec(String(execPath));
+  if (!m) return execPath;
+  const [, prefix, formula] = m;
   const real = async (p) => { try { return await fs.realpath(p); } catch { return null; } };
   const mine = await real(execPath);
   if (mine === null) return execPath;
-  for (const link of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
+  const candidates = [`${prefix}/opt/${formula}/bin/node`, `${prefix}/bin/node`];
+  for (const p of ['/opt/homebrew', '/usr/local']) if (p !== prefix) candidates.push(`${p}/bin/node`);
+  for (const link of candidates) {
     if ((await real(link)) === mine) return link;
   }
   return execPath;
