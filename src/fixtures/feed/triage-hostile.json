@@ -1,0 +1,76 @@
+{
+  "status": "ok",
+  "account": { "id": "acct-hostile-1", "label": "Work", "login": "login.invented@example.test" },
+  "surface": [
+    {
+      "from": "Jo Bloggs <jo.bloggs@example.test>",
+      "display_name": "Jo Bloggs <jo.bloggs@example.test>",
+      "subject": "Re: call https://evil.example.test/x?t=1 tomorrow",
+      "subject_raw": "SUBJECTRAW-SENTINEL-1 www.evil.example.test",
+      "snippet": "SNIPPET-SENTINEL-1 please visit http://evil.example.test now",
+      "thread_id": "THREAD-SENTINEL-1",
+      "message_id": "<MESSAGEID-SENTINEL-1@example.test>",
+      "address": "jo.bloggs@example.test",
+      "domain": "example.test",
+      "attachments_mode": "ATTACH-SENTINEL-1",
+      "disposition": null,
+      "automated": false,
+      "date": "2026-10-16T07:00:00Z"
+    },
+    {
+      "from": "Real Looking Name FROM-SENTINEL-2",
+      "display_name": "ceo@example.test",
+      "snippet": "SNIPPET-SENTINEL-2 wire the money",
+      "address": "ceo@example.test",
+      "domain": "example.test",
+      "disposition": "block_sender_now",
+      "automated": false,
+      "date": "2026-10-16T06:59:00Z"
+    },
+    {
+      "from": "FROM-SENTINEL-3",
+      "display_name": "<a@b.c>",
+      "subject": "www.x.y/z",
+      "subject_raw": "SUBJECTRAW-SENTINEL-3",
+      "snippet": "SNIPPET-SENTINEL-3",
+      "address": "a@b.c",
+      "domain": "b.c",
+      "disposition": "   ",
+      "automated": true,
+      "date": "2026-10-16T06:58:00Z"
+    },
+    {
+      "from": "\"Quoted Person\"",
+      "display_name": "\"Quoted Person\"",
+      "subject": "(\"a@b.c\") Lunch [x@y.test] ok",
+      "snippet": "SNIPPET-SENTINEL-4",
+      "disposition": "send_to_bin_x@evil.test",
+      "automated": false,
+      "date": "2026-10-16T06:57:00Z"
+    },
+    {
+      "from": "Sinead O'Brien",
+      "display_name": "Sinead O'Brien",
+      "subject": "Two\nlines\tand\u0007bell",
+      "snippet": "SNIPPET-SENTINEL-5",
+      "disposition": "watch_important",
+      "date": "2026-10-16T06:56:00Z"
+    },
+    null,
+    7,
+    "SNIPPET-SENTINEL-6 a bare string",
+    {
+      "from": "Pat Plain",
+      "display_name": "Pat Plain",
+      "subject": "Plain subject",
+      "snippet": "SNIPPET-SENTINEL-7",
+      "thread_id": "THREAD-SENTINEL-7",
+      "automated": false
+    }
+  ],
+  "suppressed": [
+    { "from": "Muted Person", "display_name": "Muted Person", "subject": "SUPPRESSED-SENTINEL", "automated": false, "date": "2026-10-16T09:00:00Z" }
+  ],
+  "counts": { "total": 10, "surfaced": 10, "suppressed": 1 },
+  "people": { "p1": "PEOPLE-SENTINEL" }
+}

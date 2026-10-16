@@ -1,0 +1,53 @@
+{
+  "google": {
+    "credentials_present": true,
+    "accounts": [
+      {
+        "id": "g-acct-1",
+        "label": "alpha-box",
+        "login": "alpha-box@example.invalid",
+        "default": false,
+        "surfaces": [
+          "calendar",
+          "gmail"
+        ],
+        "client": "own",
+        "client_present": true,
+        "health": {
+          "status": "connected",
+          "last_verified_at": null,
+          "drops": []
+        }
+      }
+    ],
+    "legacy_tokens": [],
+    "enable_flags": {
+      "gmail": true
+    },
+    "first_time": false,
+    "guide": null
+  },
+  "microsoft": {
+    "enabled": true,
+    "accounts": [
+      {
+        "id": "m-acct-1",
+        "label": "beta-box",
+        "login": "beta-box@example.invalid",
+        "default": false,
+        "client": "own",
+        "health": {
+          "status": "connected",
+          "last_verified_at": null,
+          "drops": []
+        },
+        "tenant": "tenant-invented",
+        "personal": true,
+        "signed_in": true,
+        "levers": {}
+      }
+    ],
+    "first_time": false,
+    "application_id": "app-invented"
+  }
+}

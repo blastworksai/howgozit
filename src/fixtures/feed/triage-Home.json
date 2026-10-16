@@ -1,0 +1,35 @@
+{
+  "status": "ok",
+  "account": { "id": "acct-home-1", "label": "Home", "login": "pat.invented@example.test" },
+  "surface": [
+    {
+      "from": "Dee Placeholder",
+      "subject": "Dinner Friday",
+      "subject_raw": "Dinner Friday",
+      "snippet": "SNIPPET-SENTINEL-H1 are you free",
+      "thread_id": "THREAD-SENTINEL-H1",
+      "display_name": "Dee Placeholder",
+      "date": "2026-10-16T08:15:00+02:00",
+      "address": "dee@example.test",
+      "domain": "example.test",
+      "disposition": "allow",
+      "automated": false
+    },
+    {
+      "from": "Newsletter Co",
+      "subject": "Weekly digest",
+      "subject_raw": "Weekly digest",
+      "snippet": "SNIPPET-SENTINEL-H2 this week in news",
+      "thread_id": "THREAD-SENTINEL-H2",
+      "display_name": "Newsletter Co",
+      "date": "2026-10-16T01:00:00Z",
+      "address": "news@example.test",
+      "domain": "example.test",
+      "disposition": "newsletter_digest",
+      "automated": true
+    }
+  ],
+  "suppressed": [],
+  "counts": { "total": 2, "surfaced": 2, "suppressed": 0 },
+  "people": {}
+}

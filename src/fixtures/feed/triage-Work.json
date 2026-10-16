@@ -1,0 +1,50 @@
+{
+  "status": "ok",
+  "account": { "id": "acct-work-1", "label": "Work", "login": "pat.invented@example.test" },
+  "surface": [
+    {
+      "from": "Ada Example",
+      "subject": "Quarterly numbers",
+      "subject_raw": "Quarterly numbers",
+      "snippet": "SNIPPET-SENTINEL-W1 the numbers are attached",
+      "thread_id": "THREAD-SENTINEL-W1",
+      "display_name": "Ada Example",
+      "date": "2026-10-16T07:30:00+02:00",
+      "address": "ada@example.test",
+      "domain": "example.test",
+      "disposition": null,
+      "automated": false
+    },
+    {
+      "from": "Bob Sample",
+      "subject": "Your receipt",
+      "subject_raw": "Your receipt",
+      "snippet": "SNIPPET-SENTINEL-W2 thank you for your order",
+      "thread_id": "THREAD-SENTINEL-W2",
+      "display_name": "Bob Sample",
+      "date": "2026-10-16T05:00:00Z",
+      "address": "bob@example.test",
+      "domain": "example.test",
+      "disposition": "watch_important",
+      "automated": true
+    },
+    {
+      "from": "Cy Invented",
+      "subject": "Server down",
+      "subject_raw": "Server down",
+      "snippet": "SNIPPET-SENTINEL-W3 it fell over",
+      "thread_id": "THREAD-SENTINEL-W3",
+      "display_name": "Cy Invented",
+      "date": "2026-10-15T20:00:00+02:00",
+      "address": "cy@example.test",
+      "domain": "example.test",
+      "disposition": "live_issue",
+      "automated": false
+    }
+  ],
+  "suppressed": [
+    { "from": "Muted Person", "subject": "SUPPRESSED-SENTINEL", "display_name": "Muted Person", "automated": false, "date": "2026-10-16T09:00:00Z" }
+  ],
+  "counts": { "total": 4, "surfaced": 3, "suppressed": 1 },
+  "people": {}
+}

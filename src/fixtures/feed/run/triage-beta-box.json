@@ -1,0 +1,39 @@
+{
+  "status": "ok",
+  "account": {
+    "id": "m-acct-1",
+    "label": "beta-box",
+    "login": "beta-box@example.invalid"
+  },
+  "surface": [
+    {
+      "from": "Sender 3 <sender3@example.invalid>",
+      "subject": "Fixture subject 3",
+      "subject_raw": "Fixture subject 3",
+      "snippet": "SNIPPET-SENTINEL-b-3",
+      "thread_id": "t3",
+      "message_id": "m3",
+      "known_person": false,
+      "person_id": null,
+      "last_contacted": null,
+      "display_name": "Sender 3",
+      "date": "2026-10-15T03:00:00+00:00",
+      "address": "sender3@example.invalid",
+      "domain": "example.invalid",
+      "disposition": null,
+      "action": "none",
+      "read_state": "unread",
+      "label": "INBOX",
+      "source": "gmail",
+      "attachments_mode": "none",
+      "automated": false
+    }
+  ],
+  "suppressed": [],
+  "counts": {
+    "total": 1,
+    "surfaced": 1,
+    "suppressed": 0
+  },
+  "people": {}
+}

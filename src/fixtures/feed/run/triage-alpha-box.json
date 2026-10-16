@@ -1,0 +1,61 @@
+{
+  "status": "ok",
+  "account": {
+    "id": "g-acct-1",
+    "label": "alpha-box",
+    "login": "alpha-box@example.invalid"
+  },
+  "surface": [
+    {
+      "from": "Sender 1 <sender1@example.invalid>",
+      "subject": "Fixture subject 1",
+      "subject_raw": "Fixture subject 1",
+      "snippet": "SNIPPET-SENTINEL-a-1",
+      "thread_id": "t1",
+      "message_id": "m1",
+      "known_person": false,
+      "person_id": null,
+      "last_contacted": null,
+      "display_name": "Sender 1",
+      "date": "2026-10-15T01:00:00+00:00",
+      "address": "sender1@example.invalid",
+      "domain": "example.invalid",
+      "disposition": null,
+      "action": "none",
+      "read_state": "unread",
+      "label": "INBOX",
+      "source": "gmail",
+      "attachments_mode": "none",
+      "automated": false
+    },
+    {
+      "from": "Sender 2 <sender2@example.invalid>",
+      "subject": "Fixture subject 2",
+      "subject_raw": "Fixture subject 2",
+      "snippet": "SNIPPET-SENTINEL-a-2",
+      "thread_id": "t2",
+      "message_id": "m2",
+      "known_person": false,
+      "person_id": null,
+      "last_contacted": null,
+      "display_name": "Sender 2",
+      "date": "2026-10-15T02:00:00+00:00",
+      "address": "sender2@example.invalid",
+      "domain": "example.invalid",
+      "disposition": null,
+      "action": "none",
+      "read_state": "unread",
+      "label": "INBOX",
+      "source": "gmail",
+      "attachments_mode": "none",
+      "automated": true
+    }
+  ],
+  "suppressed": [],
+  "counts": {
+    "total": 2,
+    "surfaced": 2,
+    "suppressed": 0
+  },
+  "people": {}
+}

@@ -953,7 +953,7 @@ The document is exactly `{"updated": <now as ISO 8601 with seconds and offset>, 
 The counts are over the kept threads.
 It is written as JSON indented by 2 spaces plus a trailing newline, and a document of 256 KB or more is refused and not written.
 The `why` is `No rule for this sender yet` when the disposition is missing or blank, `You marked this sender important` for `watch_important`, `You marked this as a live issue` for `live_issue`, and `You allow this sender` for `allow`.
-Any other disposition gives `Rule: ` followed by the disposition with `_` turned into spaces, cleaned, scrubbed (R157) and cut to 200 characters.
+Any other disposition gives `Rule: ` followed by the disposition with `_` turned into spaces, cleaned and scrubbed (R157), the whole text cut to 200 characters.
 The date is ISO 8601, a date with no offset reads as UTC, and a missing or unparseable date sorts as 1970-01-01T00:00Z.
 Threads are ordered newest first, ties keep read order (mailboxes in config order, items in answer order), and the first 30 are kept.
 The `account` is `accountWord(label)` from R117, and when that gives null the `account` key is left out of that thread.
@@ -1014,6 +1014,7 @@ The inbox tag for a thread whose `account` matches a key, after R117 cleaning, g
 An unknown colour or label shows the plain tag.
 Settings without `mailboxes` give the same board and page as before, byte for byte.
 Each colour is legible on the card in light and dark, with contrast of at least 4.5:1 for the tag text.
+The eight pairs are fixed and come from the theme module, and a page carries only the pairs its threads use, so no colour is written in the stylesheet (R83) and a board without colours is unchanged.
 Check: R117's fixture plus colours; byte-equality without the block; the contrast of every colour in both themes.
 
 ### Output safety
