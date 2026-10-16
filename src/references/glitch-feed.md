@@ -10,6 +10,7 @@ For each thread: the sender's name, the subject, a group (`reply` or `fyi`), a s
 The reason is one of a few fixed lines, such as "You marked this sender important".
 Everything is cut to 200 characters. The board shows at most 30 threads, newest first.
 Mail Glitch marks as automated goes to FYI. All other mail goes to reply. Nothing goes to decide.
+The threads are the unread mail your Glitch inbox rules do not file away. No model reads it, so this is more than only what needs you.
 
 ## What never lands
 
