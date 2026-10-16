@@ -17,15 +17,17 @@ export const REASONS = {
 };
 
 // Ends a process and its children. Resolves true when the system call reported success.
-export function defaultKillTree(pid, platform = process.platform) {
-  if (platform === 'win32') {
+export function defaultKillTree(pid, { spawnImpl, platform } = {}) {
+  const plat = platform || (spawnImpl ? 'win32' : process.platform);
+  const spawnFn = spawnImpl || spawn;
+  if (plat === 'win32') {
     return new Promise((resolve) => {
       let done = false;
       const end = (v) => { if (!done) { done = true; clearTimeout(t); resolve(v); } };
       let k;
       const t = setTimeout(() => { try { k && k.kill(); } catch { /* gone */ } end(false); }, 5000);
       try {
-        k = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+        k = spawnFn('taskkill', ['/PID', String(pid), '/T', '/F'], { shell: false, stdio: 'ignore', windowsHide: true, env: childEnv(undefined, 'win32') });
         k.on('error', () => end(false));
         k.on('close', (code) => end(code === 0));
       } catch { end(false); }
@@ -85,7 +87,7 @@ export function realRun(argv, { timeoutMs, cwd, env, platform = process.platform
       let killed = false;
       try {
         killed = await Promise.race([
-          Promise.resolve((killTree || ((pid) => defaultKillTree(pid, platform)))(child.pid)),
+          Promise.resolve((killTree || ((pid) => defaultKillTree(pid, { platform })))(child.pid)),
           new Promise((r) => setTimeout(() => r(false), 6000).unref()),
         ]);
       } catch { killed = false; }

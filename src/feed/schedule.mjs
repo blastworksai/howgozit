@@ -57,9 +57,17 @@ function unitQuote(s) {
 
 // ---- builders (pure) ------------------------------------------------------------------------
 
+// One quoting rule for every path in the -Argument (CommandLineToArgvW / MS C runtime): wrap in
+// double quotes; backslashes before a quote, and before the closing one, are doubled; an embedded
+// quote becomes \". The whole string is then a PowerShell single-quoted literal (see psQuote).
+function winArg(s) {
+  const v = String(s).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1');
+  return `"${v}"`;
+}
+
 function windowsArgument(cfg) {
-  const fix = cfg.fixturesDir ? ` --fixtures "${cfg.fixturesDir}"` : '';
-  return `"${cfg.feedScript}" run --config-dir "${cfg.configDir}" --uv "${cfg.uvPath}"${fix}`;
+  const fix = cfg.fixturesDir ? ` --fixtures ${winArg(cfg.fixturesDir)}` : '';
+  return `${winArg(cfg.feedScript)} run --config-dir ${winArg(cfg.configDir)} --uv ${winArg(cfg.uvPath)}${fix}`;
 }
 
 function windowsTrigger(cfg) {
@@ -238,7 +246,8 @@ export async function plan(osName, cfg, deps) {
 async function readCron(deps) {
   const r = await deps.run('crontab', ['-l']);
   if (r.code === 0) return String(r.stdout ?? '');
-  if (/no crontab/i.test(String(r.stderr || ''))) return '';
+  // "no crontab for <user>" is an empty crontab; so is a machine with no crontab program at all.
+  if (/no crontab for/i.test(String(r.stderr || '')) || r.code === 127) return '';
   throw new Error(`schedule: could not read the crontab: ${oneLine(r.stderr)}`);
 }
 
@@ -249,23 +258,13 @@ const withoutOurs = (text) =>
     .filter((l) => !isOurs(l))
     .join('\n');
 
-// Take our cron line out, leaving every other line byte for byte. A crontab that cannot be read
-// proves nothing about us, so with `lenient` it is left alone.
-async function dropCronLine(deps, lenient) {
-  let existing;
-  try {
-    existing = await readCron(deps);
-  } catch (err) {
-    if (lenient) return;
-    throw err;
-  }
+// Take our cron line out of the crontab text already read, leaving every other line byte for byte.
+async function dropCronLine(deps, existing) {
   const kept = withoutOurs(existing);
   if (kept === existing) return;
   await must(deps, 'crontab', ['-'], 'writing the crontab', { input: kept });
   const after = await readCron(deps);
-  if (withoutOurs(after) !== after) {
-    throw new Error('schedule: the cron line is still in the crontab');
-  }
+  if (withoutOurs(after) !== after) throw new Error('schedule: the cron line is still in the crontab');
 }
 
 async function exists(deps, path) {
@@ -293,6 +292,8 @@ async function unitsPresent(deps) {
 
 export async function apply(osName, cfg, deps) {
   const p = await plan(osName, cfg, deps);
+  // On linux read the crontab before anything changes: an unreadable one refuses the whole apply.
+  const cronBefore = osName === 'linux' ? await readCron(deps) : '';
   if (p.kind === 'schtasks') {
     await must(deps, p.commands[0][0], p.commands[0].slice(1), 'registering the task');
   } else if (p.kind === 'launchd') {
@@ -307,9 +308,9 @@ export async function apply(osName, cfg, deps) {
     await must(deps, 'systemctl', ['--user', 'daemon-reload'], 'daemon-reload');
     await must(deps, 'systemctl', ['--user', 'enable', '--now', `${UNIT}.timer`], 'enabling the timer');
     await deps.run('systemctl', ['--user', 'try-restart', `${UNIT}.timer`]);
-    await dropCronLine(deps, true); // never leave the other backend running as well
+    await dropCronLine(deps, cronBefore); // never leave the other backend running as well
   } else {
-    let existing = withoutOurs(await readCron(deps));
+    let existing = withoutOurs(cronBefore);
     if (existing !== '' && !existing.endsWith('\n')) existing += '\n';
     await must(deps, 'crontab', ['-'], 'writing the crontab', { input: existing + p.files[0].text });
     await dropUnitFiles(deps); // no user manager answers, so the files are all there is to remove
@@ -345,15 +346,15 @@ export async function remove(osName, cfg, deps) {
     const target = `gui/${id}/${LAUNCH_LABEL}`;
     const out = await deps.run('launchctl', ['bootout', target]);
     const still = await deps.run('launchctl', ['print', target]);
-    if (still.code === 0) {
-      throw new Error(`schedule: launchctl bootout failed (${out.code}) and the agent is still loaded: ${oneLine(out.stderr)}`);
+    if (still.code !== 113) {
+      throw new Error(`schedule: could not confirm the agent is unloaded (bootout ${out.code}, print ${still.code}): ${oneLine(out.stderr)}`);
     }
     await deps.fs.rm(plistPath(deps), { force: true });
     return { os: osName, kind: 'launchd', name: NAME, installed: false };
   }
   if (osName === 'linux') {
     const kind = await linuxKind(deps);
-    await dropCronLine(deps, kind === 'systemd');
+    const cronBefore = await readCron(deps); // unreadable: refuse before any change
     if (kind === 'systemd' && (await unitsPresent(deps))) {
       const r = await deps.run('systemctl', ['--user', 'disable', '--now', `${UNIT}.timer`]);
       if (r.code !== 0 && (await exists(deps, `${unitDir(deps)}/${UNIT}.timer`))) {
@@ -361,11 +362,16 @@ export async function remove(osName, cfg, deps) {
       }
     }
     await dropUnitFiles(deps);
+    await dropCronLine(deps, cronBefore);
     if (kind === 'systemd') await deps.run('systemctl', ['--user', 'daemon-reload']);
     if (await unitsPresent(deps)) throw new Error('schedule: the unit files are still on disk after removal');
     if (kind === 'systemd') {
       const v = await deps.run('systemctl', ['--user', 'is-enabled', `${UNIT}.timer`]);
       if (v.code === 0) throw new Error('schedule: the timer is still enabled after removal');
+      for (const u of [`${UNIT}.timer`, `${UNIT}.service`]) {
+        const a = await deps.run('systemctl', ['--user', 'is-active', u]);
+        if (a.code === 0) throw new Error(`schedule: ${u} is still active after removal`);
+      }
     }
     return { os: osName, kind, name: NAME, installed: false, note: lingerNote(deps) };
   }

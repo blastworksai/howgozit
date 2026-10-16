@@ -975,6 +975,7 @@ Check: a fake health answer with one unhealthy mailbox gives no triage call for 
 `run` allows 60 seconds per door call and 300 seconds per run.
 `check`, run attended in setup, allows 240 seconds per call, because Glitch's first triage of a mailbox does a one-time sent-mail backfill.
 A call over its limit is killed with its whole process group and named "took too long".
+On Windows the whole tree is killed by `taskkill /T`; if `taskkill` itself fails, the feed kills the process it started, names the failure and stops within its limit, and a process that one started may be left running.
 No new call starts with under 3 seconds left.
 Check: an injected clock; a call over its limit is killed and named; a call with under 3 seconds left is never started; `check` allows 240 seconds.
 
@@ -996,6 +997,7 @@ Check: both targets against `fake-github` and a temp folder; both variables set 
 That is the Windows Task Scheduler task `\Howgozit\Feed`, the macOS LaunchAgent `ai.blastworks.howgozit.feed`, the Linux systemd user timer `howgozit-feed.timer`, or one crontab line tagged `# howgozit-feed` when no user service manager answers.
 `morning` is 06:00 daily and `hourly` is every hour from 07:00 to 22:00, both in the machine's local time.
 The job names `node` and `uv` by absolute paths resolved at `apply` time, because a scheduler's PATH is minimal, and never a `.cmd` shim on Windows.
+A Homebrew Node is named by its stable link, never by a versioned folder that an upgrade removes.
 Given `--fixtures <dir>`, `plan` and `apply` add `--fixtures <dir>` with the folder as an absolute path to the job's command, to prove the job on a machine without Glitch; without it the job's command is unchanged.
 A second apply replaces only its own job, and `remove` leaves no trace.
 Glitch's own `\Glitch\Watch`, `com.glitch.watch` and `glitch-watch` are never read, changed or removed.

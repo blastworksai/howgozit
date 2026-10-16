@@ -110,6 +110,9 @@ function makeRunner(world, fs) {
     failBootout: null, // darwin: exit code returned for a loaded howgozit agent
     failDisable: false, // systemd: disable/stop of a present howgozit unit exits 1
     failUnregister: false, // win32: howgozit task cannot be removed
+    cronListFail: false, // crontab -l exits 1 with 'crontab: cannot open' (not 'no crontab for')
+    failPrint: null, // darwin: exit code of launchctl print|list for a howgozit label
+    stayActive: false, // systemd: is-active howgozit-feed.timer answers active even after disable
     tasks: new Map(world === 'win32' ? [[WIN_GLITCH, WIN_GLITCH_SPEC]] : []),
     loaded: new Set(world === 'darwin' ? ['com.glitch.watch'] : []),
   };
@@ -125,6 +128,8 @@ function makeRunner(world, fs) {
       const a = call.args.filter((x) => x !== '--user');
       if (a[0] === 'show-environment') return st.systemd ? ok('HOME=/home/tester\n') : bad(1, 'Failed to connect to bus');
       if (!st.systemd) return bad(1, 'Failed to connect to bus'); // no user manager: every other verb fails too
+      if (a[0] === 'is-active' && st.stayActive) return ok('active\n');
+      if (a[0] === 'is-active' && !fs.files.has(timerPath)) return bad(3, 'inactive');
       if (['is-enabled', 'is-active', 'status', 'cat', 'show', 'list-timers'].includes(a[0])) {
         return fs.files.has(timerPath) ? ok() : bad(1, 'not found');
       }
@@ -138,6 +143,7 @@ function makeRunner(world, fs) {
     }
     if (base === 'crontab') {
       if (call.args.length === 1 && call.args[0] === '-l') {
+        if (st.cronListFail) return bad(1, 'crontab: cannot open');
         return st.cron === null ? bad(1, 'no crontab for tester') : ok(st.cron);
       }
       if (call.args.length === 1 && call.args[0] === '-') {
@@ -161,6 +167,7 @@ function makeRunner(world, fs) {
         st.loaded.delete(label);
         return ok();
       }
+      if ((verb === 'print' || verb === 'list') && st.failPrint && /howgozit/.test(label)) return bad(st.failPrint, 'launchctl failed');
       if (verb === 'print' || verb === 'list') return st.loaded.has(label) ? ok() : bad(113, 'not loaded');
       return ok();
     }
@@ -972,4 +979,178 @@ test('R162 win32: remove counts a missing task as already absent and succeeds', 
   o = await outcome(() => remove('win32', e.cfg, e.deps));
   assert.ok(isSuccess(o), `task already gone: ${describeOutcome(o)}`);
   assertNothingOurs(e);
+});
+
+// ---------------------------------------------------------------------------
+// Review round 2: findings 10, 5, 6 (feed-review-codex-2.md). Extra fake switches:
+// st.cronListFail, st.failPrint, st.stayActive (see makeRunner).
+// ---------------------------------------------------------------------------
+
+// ---- Finding 10: Windows argument quoting round-trips through CommandLineToArgvW ----
+// Reference parser for the MS C runtime / CommandLineToArgvW rules (the part that matters here):
+// 2N backslashes + quote -> N backslashes and the quote toggles quoting; 2N+1 backslashes + quote ->
+// N backslashes and a literal quote; backslashes not followed by a quote are literal. Unquoted
+// space or tab ends an argument.
+function argvFromCommandLine(s) {
+  const args = [];
+  let i = 0;
+  const n = s.length;
+  for (;;) {
+    while (i < n && (s[i] === ' ' || s[i] === '\t')) i++;
+    if (i >= n) break;
+    let cur = '';
+    let inQuote = false;
+    while (i < n) {
+      const c = s[i];
+      if (c === '\\') {
+        let run = 0;
+        while (s[i + run] === '\\') run++;
+        if (s[i + run] === '"') {
+          cur += '\\'.repeat(Math.floor(run / 2));
+          if (run % 2) {
+            cur += '"';
+            i += run + 1;
+          } else i += run; // the quote itself toggles on the next turn
+        } else {
+          cur += '\\'.repeat(run);
+          i += run;
+        }
+      } else if (c === '"') {
+        inQuote = !inQuote;
+        i++;
+      } else if (!inQuote && (c === ' ' || c === '\t')) break;
+      else {
+        cur += c;
+        i++;
+      }
+    }
+    args.push(cur);
+  }
+  return args;
+}
+test('R162 win32: the reference CommandLineToArgvW parser follows the documented rules', () => {
+  assert.deepEqual(argvFromCommandLine('"C:\\\\" x'), ['C:\\', 'x']);
+  assert.deepEqual(argvFromCommandLine('"C:\\a b\\\\" y'), ['C:\\a b\\', 'y']);
+  assert.deepEqual(argvFromCommandLine('a\\"b c'), ['a"b', 'c']);
+  assert.deepEqual(argvFromCommandLine('"C:\\" x'), ['C:" x']); // the broken quoting: backslash-quote eats the quote
+});
+
+// The job's command-line string: the PowerShell single-quoted literal (inline or in a variable) holding --uv.
+function windowsArgumentString(text) {
+  const literals = [...text.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1].replace(/''/g, "'"));
+  const hit = literals.find((l) => l.includes('--uv'));
+  assert.ok(hit, `a PowerShell single-quoted literal holding the job arguments (--uv) in:\n${text}`);
+  return hit;
+}
+const WIN_PATHS = ['C:\\', 'D:\\', 'C:\\fix dir\\', 'C:\\fix dir\\\\', 'C:\\Program Files\\hg x\\data\\', 'C:\\plain\\x'];
+
+function assertWinRoundTrip(text, cfg, label) {
+  const arg = windowsArgumentString(text);
+  const argv = argvFromCommandLine(arg);
+  const want = [cfg.feedScript, 'run', '--config-dir', cfg.configDir, '--uv', cfg.uvPath];
+  if (cfg.fixturesDir) want.push('--fixtures', cfg.fixturesDir);
+  const tail = argv.slice(argv.length - want.length);
+  assert.deepEqual(tail, want, `${label}: Windows argument rules give back the exact paths from:\n${arg}`);
+  assert.ok(argv.length - want.length <= 1, `${label}: at most the node path precedes the script`);
+}
+
+test('R162 win32: a fixturesDir ending in a backslash is quoted as "C:\\\\" (the backslash doubled)', async () => {
+  const e = makeEnv(SCENARIOS[0]);
+  const cfg = { ...e.cfg, fixturesDir: 'C:\\' };
+  const p = await plan('win32', cfg, e.deps);
+  const arg = windowsArgumentString(planJobText(p));
+  assert.ok(arg.includes('--fixtures "C:\\\\"'), `expected --fixtures "C:\\\\" in: ${arg}`);
+  await apply('win32', cfg, e.deps);
+  assert.ok(windowsArgumentString(installedJobText(e)).includes('--fixtures "C:\\\\"'));
+});
+
+test('R162 win32: every path the job carries round-trips through Windows argument rules (plan)', async () => {
+  for (const configDir of WIN_PATHS) {
+    for (const fixturesDir of [undefined, ...WIN_PATHS]) {
+      const e = makeEnv(SCENARIOS[0]);
+      const cfg = { ...e.cfg, configDir };
+      if (fixturesDir) cfg.fixturesDir = fixturesDir;
+      assertWinRoundTrip(planJobText(await plan('win32', cfg, e.deps)), cfg, `plan configDir=${configDir} fixturesDir=${fixturesDir}`);
+    }
+  }
+});
+
+test('R162 win32: every path the job carries round-trips through Windows argument rules (apply)', async () => {
+  for (const configDir of WIN_PATHS) {
+    const e = makeEnv(SCENARIOS[0]);
+    const cfg = { ...e.cfg, configDir, fixturesDir: 'C:\\' };
+    await apply('win32', cfg, e.deps);
+    assertWinRoundTrip(installedJobText(e), cfg, `apply configDir=${configDir}`);
+  }
+  const e = makeEnv(SCENARIOS[0]);
+  const cfg = { ...e.cfg, uvPath: 'C:\\Users\\a b\\.local\\bin\\uv.exe', feedScript: 'C:\\hg x\\feed.mjs' };
+  await apply('win32', cfg, e.deps);
+  assertWinRoundTrip(installedJobText(e), cfg, 'apply spaces in uvPath and feedScript');
+});
+
+// ---- Finding 5 (round 2): a crontab -l failure other than "no crontab for" refuses ----
+for (const available of [true, false]) {
+  for (const verb of ['apply', 'remove']) {
+    test(`R162 linux: ${verb} refuses when crontab -l fails (cannot open) with systemd ${available ? 'available' : 'unavailable'} and changes nothing`, async () => {
+      const e = makeEnv(BOTH);
+      e.runner.st.systemd = available;
+      if (verb === 'remove') await apply('linux', e.cfg, e.deps); // something installed to lose
+      e.runner.st.cronListFail = true;
+      const before = worldSnapshot(e);
+      const mutBefore = e.runner.mutating().length;
+      const fsBefore = fsMutations(e).length;
+      const fn = verb === 'apply' ? apply : remove;
+      const o = await outcome(() => fn('linux', e.cfg, e.deps));
+      assert.ok(isFailure(o), `expected a one-sentence refusal, got ${describeOutcome(o)}`);
+      assert.equal(worldSnapshot(e), before, 'fs, crontab and units unchanged');
+      assert.equal(e.runner.mutating().length, mutBefore, 'no systemctl enable/disable, no crontab write');
+      assert.equal(fsMutations(e).length, fsBefore, 'no unit written or removed');
+    });
+  }
+}
+
+test('R162 linux: "no crontab for <user>" still counts as an empty crontab', async () => {
+  const e = makeEnv(BOTH);
+  e.runner.st.cron = null;
+  e.runner.st.systemd = false;
+  await apply('linux', e.cfg, e.deps);
+  assert.equal(ourCronLines(e).length, 1, 'our line written into an empty crontab');
+  const f = makeEnv(BOTH);
+  f.runner.st.cron = null;
+  f.runner.st.systemd = false;
+  const o = await outcome(() => remove('linux', f.cfg, f.deps));
+  assert.ok(isSuccess(o), describeOutcome(o));
+  f.runner.st.systemd = true;
+  const o2 = await outcome(() => remove('linux', f.cfg, f.deps));
+  assert.ok(isSuccess(o2), describeOutcome(o2));
+});
+
+// ---- Finding 6 (round 2): confirm the unload with a second look ----
+for (const printCode of [1, 36]) {
+  test(`R162 darwin: remove does not report success and keeps the plist when bootout fails (5) and launchctl print fails with ${printCode}`, async () => {
+    const e = makeEnv(SCENARIOS[1]);
+    await apply('darwin', e.cfg, e.deps);
+    e.runner.st.failBootout = 5;
+    e.runner.st.failPrint = printCode;
+    const o = await outcome(() => remove('darwin', e.cfg, e.deps));
+    assert.ok(!isSuccess(o), `must not report success: ${describeOutcome(o)}`);
+    assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), describeOutcome(o));
+    assert.ok(e.fs.files.has(darwinPlist(e)), 'plist NOT deleted');
+    assert.ok(e.runner.calls.some((c) => c.cmd === 'launchctl' && ['print', 'list'].includes(c.args[0])), 'launchctl print|list was asked');
+  });
+}
+
+test('R162 linux-systemd: remove checks is-active as well as is-enabled after disable --now; active is not success', async () => {
+  const e = makeEnv(SCENARIOS[2]);
+  await apply('linux', e.cfg, e.deps);
+  const from = e.runner.calls.length;
+  e.runner.st.stayActive = true;
+  const o = await outcome(() => remove('linux', e.cfg, e.deps));
+  const after = e.runner.calls.slice(from).filter((c) => c.cmd === 'systemctl').map((c) => c.args.filter((a) => a !== '--user').join(' '));
+  const d = after.findIndex((a) => /^disable\b/.test(a));
+  assert.ok(d >= 0, `systemctl disable ran: ${after.join(' | ')}`);
+  assert.ok(after.slice(d + 1).some((a) => /^is-enabled\b.*howgozit-feed/.test(a)), `is-enabled asked after disable: ${after.join(' | ')}`);
+  assert.ok(after.slice(d + 1).some((a) => /^is-active\b.*howgozit-feed/.test(a)), `is-active asked after disable: ${after.join(' | ')}`);
+  assert.ok(!isSuccess(o), `an active timer is not success: ${describeOutcome(o)}`);
+  assert.ok(o.threw ? isFailure(o) : o.res.installed === true || isFailure(o), describeOutcome(o));
 });

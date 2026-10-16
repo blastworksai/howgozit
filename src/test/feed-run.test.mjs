@@ -7,7 +7,8 @@ import fsp from 'node:fs/promises';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readMailboxes, realRun } from '../feed/doors.mjs';
+import { EventEmitter } from 'node:events';
+import { readMailboxes, realRun, defaultKillTree } from '../feed/doors.mjs';
 import { readFeedConfig } from '../feed/config.mjs';
 import { main } from '../scripts/feed.mjs';
 import {
@@ -669,6 +670,33 @@ test('R162 findUv never returns a relative path: a relative PATH entry is resolv
   assert.ok(bare === null || path.isAbsolute(bare), `findUv returned a relative path: ${bare}`);
 });
 
+// Round 2, finding 1: the default win32 killTree spawns taskkill with a sanitised env.
+test('R159 defaultKillTree spawns taskkill with no BOARD_* in its env, shell false and the exact args', async () => {
+  const saved = process.env.BOARD_GITHUB_TOKEN;
+  process.env.BOARD_GITHUB_TOKEN = TOKEN;
+  const seen = [];
+  const spawnImpl = (cmd, args, opts) => {
+    seen.push({ cmd, args, opts });
+    const child = new EventEmitter();
+    child.unref = () => {};
+    child.kill = () => true;
+    setImmediate(() => { child.emit('exit', 0, null); child.emit('close', 0, null); });
+    return child;
+  };
+  try {
+    await defaultKillTree(4321, { spawnImpl });
+  } finally {
+    if (saved === undefined) delete process.env.BOARD_GITHUB_TOKEN; else process.env.BOARD_GITHUB_TOKEN = saved;
+  }
+  assert.equal(seen.length, 1);
+  assert.match(seen[0].cmd, /taskkill/i);
+  assert.deepEqual(seen[0].args, ['/PID', '4321', '/T', '/F']);
+  assert.equal(seen[0].opts.shell, false);
+  assert.ok(seen[0].opts.env && typeof seen[0].opts.env === 'object', 'an explicit env is passed');
+  assert.deepEqual(Object.keys(seen[0].opts.env).filter((k) => k.startsWith('BOARD_')), []);
+  assert.ok(!JSON.stringify(seen[0].opts.env).includes(TOKEN));
+});
+
 // Finding 8: on win32 realRun races killTree (true = the system kill worked) against 6 s; if it returns false, throws or
 // hangs, it falls back to SIGKILL on the child, so neither the child nor its pipe holds the feed open. Simulated on POSIX
 // with realRun(argv, { timeoutMs, platform: 'win32', killTree }).
@@ -696,6 +724,32 @@ for (const [name, killTree] of [
     assert.ok(gone, 'the child pid is gone afterwards');
   });
 }
+
+// R162: a Homebrew Node is baked by its stable link, never by the versioned Cellar folder.
+const CELLAR = '/opt/homebrew/Cellar/node/26.0.0/bin/node';
+const realpathFs = (map) => ({ realpath: async (p) => { if (Object.hasOwn(map, p)) return map[p]; const e = new Error(`ENOENT: ${p}`); e.code = 'ENOENT'; throw e; } });
+const stable = async (execPath, map) => (await import('../scripts/feed.mjs')).stableNodePath(execPath, { fs: realpathFs(map), platform: 'darwin' });
+
+test('R162 stableNodePath returns /opt/homebrew/bin/node when it resolves to the same Cellar node', async () => {
+  assert.equal(await stable(CELLAR, { [CELLAR]: CELLAR, '/opt/homebrew/bin/node': CELLAR, '/usr/local/bin/node': CELLAR }), '/opt/homebrew/bin/node');
+});
+
+test('R162 stableNodePath returns /usr/local/bin/node when only it matches', async () => {
+  const cellar = '/usr/local/Cellar/node/25.1.0/bin/node';
+  assert.equal(await stable(cellar, { [cellar]: cellar, '/opt/homebrew/bin/node': '/opt/homebrew/Cellar/node/24.0.0/bin/node', '/usr/local/bin/node': cellar }), '/usr/local/bin/node');
+  assert.equal(await stable(cellar, { [cellar]: cellar, '/usr/local/bin/node': cellar }), '/usr/local/bin/node', 'a missing /opt/homebrew/bin/node is skipped');
+});
+
+test('R162 stableNodePath returns execPath unchanged when neither link matches', async () => {
+  assert.equal(await stable(CELLAR, { [CELLAR]: CELLAR, '/opt/homebrew/bin/node': '/elsewhere/node', '/usr/local/bin/node': '/other/node' }), CELLAR);
+  assert.equal(await stable(CELLAR, { [CELLAR]: CELLAR }), CELLAR);
+});
+
+test('R162 stableNodePath leaves a path outside any Cellar unchanged', async () => {
+  for (const p of ['/usr/bin/node', 'C:\\Program Files\\nodejs\\node.exe', '/opt/homebrew/bin/node']) {
+    assert.equal(await stable(p, { [p]: p, '/opt/homebrew/bin/node': p, '/usr/local/bin/node': p }), p);
+  }
+});
 
 // ---------------- helpers ----------------
 async function tmpDir() { return fsp.mkdtemp(path.join(os.tmpdir(), 'feed-run-test-')); }

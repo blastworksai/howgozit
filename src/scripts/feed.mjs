@@ -55,6 +55,18 @@ function commandRun(cmd, args, { input } = {}) {
   });
 }
 
+// A Homebrew Node is baked by its stable link, never by the versioned Cellar folder.
+export async function stableNodePath(execPath, { fs, platform } = {}) {
+  if (!String(execPath).includes('/Cellar/node')) return execPath;
+  const real = async (p) => { try { return await fs.realpath(p); } catch { return null; } };
+  const mine = await real(execPath);
+  if (mine === null) return execPath;
+  for (const link of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
+    if ((await real(link)) === mine) return link;
+  }
+  return execPath;
+}
+
 export async function main(argv, deps) {
   const { env = {}, fetch, cwd = process.cwd(), out, err } = deps;
   const fs = deps.fs || fsp;
@@ -89,7 +101,7 @@ export async function main(argv, deps) {
     if (verb === 'schedule') {
       if (!uv) return fail('uv was not found; pass --uv <absolute path to uv>.');
       const schedule = await import('../feed/schedule.mjs');
-      const cfg = { frequency: config.frequency, nodePath: process.execPath, uvPath: uv, feedScript: FEED_SCRIPT, configDir, ...(fixturesDir && (sub === 'plan' || sub === 'apply') ? { fixturesDir: resolve(cwd, fixturesDir) } : {}) };
+      const cfg = { frequency: config.frequency, nodePath: await stableNodePath(process.execPath, { fs: fsp, platform: process.platform }), uvPath: uv, feedScript: FEED_SCRIPT, configDir, ...(fixturesDir && (sub === 'plan' || sub === 'apply') ? { fixturesDir: resolve(cwd, fixturesDir) } : {}) };
       const sdeps = { run: deps.scheduleRun || commandRun, fs, home, user: deps.user || os.userInfo().username };
       const osName = deps.osName || process.platform;
       const result = await schedule[sub](osName, cfg, sdeps);
