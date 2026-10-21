@@ -14,9 +14,9 @@ const tokenOf = (seed) => 'ghp_' + Array.from({ length: 36 }, (_, i) => LETTERS[
 const TOKEN = tokenOf(7);
 const TOKEN2 = tokenOf(11);
 const SOURCE = 'Elmwood/howgozit';
-const WLPT = 'brightcraft/blastworks-Woodshop';
+const WOODSHOP = 'brightcraft/Woodshop-site';
 const BOOK = 'brightcraft/book';
-const IN2 = 'inkPress/inkPress';
+const INKPRESS = 'inkPress/inkPress';
 const ownerOf = (repo) => repo.split('/')[0];
 const FROM = (n) => `<!-- howgozit-migrated-from: ${SOURCE}#${n} -->`;
 const TOKEN_SHAPE = /gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}/;
@@ -133,9 +133,9 @@ test('U verify passes after a full plan and apply: every pair same, verify-recor
 
 test('U verify fails with exit 1 and names the difference after a copy label is changed', async (t) => {
   const s = await applied(t);
-  const copy = (await issuesOf(s.world, WLPT)).find((i) => endsWith(i, FROM(1)));
+  const copy = (await issuesOf(s.world, WOODSHOP)).find((i) => endsWith(i, FROM(1)));
   assert.ok(copy, 'the copy of #1 exists');
-  await s.world.fakes.brightcraft.http.send('PATCH', `/repos/${WLPT}/issues/${copy.number}`, { labels: ['somethingelse'] });
+  await s.world.fakes.brightcraft.http.send('PATCH', `/repos/${WOODSHOP}/issues/${copy.number}`, { labels: ['somethingelse'] });
   await s.tick();
   const v = await s.run('verify');
   assert.equal(v.code, 1, v.all.join('\n'));
@@ -172,9 +172,9 @@ test('U delete is refused with a stale verify: apply was run again after it', as
   await cp10(s, {});
   await s.tick();
   // a real change: a new open issue lands on old Project 1 (a no-op re-apply does not make verify stale)
-  const einher = s.world.fakes.Elmwood;
-  const created = einher.direct.request('POST', `/repos/${SOURCE}/issues`, { title: 'Added after verify', body: 'Body of Added after verify' });
-  einher.direct.request('POST', '/users/Elmwood/projectsV2/1/items', { type: 'Issue', owner: 'Elmwood', repo: 'howgozit', number: created.number });
+  const elmwood = s.world.fakes.Elmwood;
+  const created = elmwood.direct.request('POST', `/repos/${SOURCE}/issues`, { title: 'Added after verify', body: 'Body of Added after verify' });
+  elmwood.direct.request('POST', '/users/Elmwood/projectsV2/1/items', { type: 'Issue', owner: 'Elmwood', repo: 'howgozit', number: created.number });
   const replan = await s.run('plan');
   assert.equal(replan.code, 0, replan.all.join('\n'));
   await s.tick();
@@ -263,7 +263,7 @@ test('U delete with --confirm reads the originals back as 410 and deletes only t
     assert.deepEqual(issues.find((i) => i.number === n), untouched[n], `#${n} untouched`);
     assert.deepEqual(await commentsOf(s.world, SOURCE, n), comments[n], `#${n} comments untouched`);
   }
-  for (const [repo, n] of [[WLPT, 1], [IN2, 3], [BOOK, 6]]) {
+  for (const [repo, n] of [[WOODSHOP, 1], [INKPRESS, 3], [BOOK, 6]]) {
     assert.ok((await issuesOf(s.world, repo)).some((i) => endsWith(i, FROM(n))), `the copy of #${n} survives`);
   }
   const rec = await readJson(s, 'migration-record.json');
@@ -281,7 +281,7 @@ test('U delete with --confirm deletes the empty Pilot goal original and keeps th
   const two = (await issuesOf(s.world, SOURCE)).find((i) => i.number === 2);
   assert.equal(two.state, 'closed');
   assert.equal(two.milestone && two.milestone.title, 'Woodshop · Launch', 'closed #2 keeps its goal');
-  assert.ok((await milestonesOf(s.world, IN2)).some((m) => m.title === 'Pilot'), 'the copy of Pilot survives');
+  assert.ok((await milestonesOf(s.world, INKPRESS)).some((m) => m.title === 'Pilot'), 'the copy of Pilot survives');
 });
 
 test('U delete with --confirm removes old Projects 1 to 3 and leaves Project 4, Ideas and Habits', async (t) => {

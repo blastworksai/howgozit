@@ -12,9 +12,9 @@ import { GitHubError } from '../board/github/http.mjs';
 
 const TOKEN = 'ghp_' + 'c'.repeat(36);
 const SOURCE = 'Elmwood/howgozit';
-const WLPT = 'brightcraft/blastworks-Woodshop';
+const WOODSHOP = 'brightcraft/Woodshop-site';
 const BOOK = 'brightcraft/book';
-const IN2 = 'inkPress/inkPress';
+const INKPRESS = 'inkPress/inkPress';
 const ownerOf = (repo) => repo.split('/')[0];
 const FROM = (n) => `<!-- howgozit-migrated-from: ${SOURCE}#${n} -->`;
 const FUTURE = '2099-01-01T00:00:00.000Z';
@@ -78,7 +78,7 @@ const copyOf = async (world, repo, oldN) => {
 const readJson = async (s, name) => JSON.parse(await readFile(join(s.outDir, name), 'utf8'));
 const stillThere = async (world, n) => (await world.fakes.Elmwood.http.get(`/repos/${SOURCE}/issues/${n}`)).json;
 const assertGone = (world, n) => assert.rejects(world.fakes.Elmwood.http.get(`/repos/${SOURCE}/issues/${n}`), (e) => e.status === 410 || e.status === 404, `#${n} reads back gone`);
-const sharedHome = (map) => { map.projects.inkpress.home = WLPT; map.projects.inkpress.projectOwner = 'brightcraft'; };
+const sharedHome = (map) => { map.projects.inkpress.home = WOODSHOP; map.projects.inkpress.projectOwner = 'brightcraft'; };
 
 test('U R2-1 delete refuses when the map names another source than the record and deletes nothing anywhere', async (t) => {
   const s = await setup(t);
@@ -100,19 +100,19 @@ test('U R2-1 delete refuses when the map names another source than the record an
 
 test('U R2-2 two empty goals that become the same title in a shared home stop apply with the sentence and adopt no marked milestone', async (t) => {
   // The plan keeps the full title of goals whose stripped titles collide, so the collision left is the nested one:
-  // A = inkPress, B = BOOK, C = Woodshop, all three moving Projects sharing WLPT as home. "A · Launch" and "B · Launch"
+  // A = inkPress, B = BOOK, C = Woodshop, all three moving Projects sharing WOODSHOP as home. "A · Launch" and "B · Launch"
   // both strip to "Launch", so both keep their full titles; "C · A · Launch" strips to "A · Launch", the full title A kept.
   // (The world's own "Woodshop · Launch", holding #1 and #2, is a fourth goal and also keeps its full title.)
-  const s = await setup(t, { editMap: (map) => { sharedHome(map); const b = map.projects['bookshelf-planner']; b.home = WLPT; b.projectOwner = 'brightcraft'; map.createRepos = []; } });
-  const einher = s.world.fakes.Elmwood;
+  const s = await setup(t, { editMap: (map) => { sharedHome(map); const b = map.projects['bookshelf-planner']; b.home = WOODSHOP; b.projectOwner = 'brightcraft'; map.createRepos = []; } });
+  const elmwood = s.world.fakes.Elmwood;
   for (const title of ['inkPress · Launch', 'BOOK · Launch', 'Woodshop · inkPress · Launch']) {
-    einher.direct.request('POST', `/repos/${SOURCE}/milestones`, { title, description: title });
+    elmwood.direct.request('POST', `/repos/${SOURCE}/milestones`, { title, description: title });
   }
   await planned(s);
   const a = await s.run('apply');
   assert.equal(a.code, 1, a.all.join('\n'));
-  assert.ok(a.all.join('\n').includes(`${WLPT} already holds goal "inkPress · Launch" from another original; rename one of them first.`), a.all.join('\n'));
-  const launches = (await milestonesOf(s.world, WLPT)).filter((m) => m.title === 'inkPress · Launch');
+  assert.ok(a.all.join('\n').includes(`${WOODSHOP} already holds goal "inkPress · Launch" from another original; rename one of them first.`), a.all.join('\n'));
+  const launches = (await milestonesOf(s.world, WOODSHOP)).filter((m) => m.title === 'inkPress · Launch');
   assert.equal(launches.length, 1, 'only the first original made the goal; the second did not adopt it');
   const markers = String(launches[0].description || '').split('\n').filter((l) => l.includes('howgozit-migrated-from'));
   assert.equal(markers.length, 1, 'the marked milestone still carries exactly one original\'s marker');
@@ -236,8 +236,8 @@ test('U R2-7 a marked copy already on its Project with a Status the source does 
   oldItem.status = null;
   await applied(s);
   assert.ok(fired, 'the copy was added to the inkPress Project');
-  const copy = await copyOf(s.world, IN2, 3);
-  const item = itemOf(projectOf(s.world, 'inkPress', 'inkPress'), IN2, copy.number);
+  const copy = await copyOf(s.world, INKPRESS, 3);
+  const item = itemOf(projectOf(s.world, 'inkPress', 'inkPress'), INKPRESS, copy.number);
   assert.ok(item, 'the copy is on the new Project');
   assert.ok(!item.status, `Status was cleared (is ${JSON.stringify(item.status)})`);
   await verifiedOk(s);

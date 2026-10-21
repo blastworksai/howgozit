@@ -1,6 +1,6 @@
 // CP8: a small three-owner world for the migration tests. One fake per owner, routed by owner. Every value is invented.
 //   Elmwood (user)    Elmwood/howgozit, the source, with four old Projects and six issues
-//   brightcraft (org)   brightcraft/blastworks-Woodshop (no book yet: apply creates it)
+//   brightcraft (org)   brightcraft/Woodshop-site (no book yet: apply creates it)
 //   inkPress (org)         inkPress/inkPress
 // `owners.forOwner(login)` is that owner's own client; `owners.default` routes a REST path by the owner in it
 // and sends everything else (GraphQL, /user/repos) to the Elmwood fake, as the one token of the person who runs it.
@@ -9,8 +9,8 @@ import { createFakeGitHub } from './fake-github.mjs';
 import { GitHubError } from '../board/github/http.mjs';
 
 const SOURCE = 'Elmwood/howgozit';
-const WL = 'brightcraft/blastworks-Woodshop';
-const IN2 = 'inkPress/inkPress';
+const WOODSHOP = 'brightcraft/Woodshop-site';
+const INKPRESS = 'inkPress/inkPress';
 const BOOK = 'brightcraft/book';
 const API = 'https://api.github.com';
 
@@ -29,28 +29,28 @@ const SETTINGS = {
 
 export function createMigrateWorld({ publicTarget } = {}) {
   const pub = publicTarget === undefined ? null : String(publicTarget).toLowerCase();
-  if (pub !== null && ![WL, IN2, BOOK, SOURCE].some((r) => r.toLowerCase() === pub)) {
+  if (pub !== null && ![WOODSHOP, INKPRESS, BOOK, SOURCE].some((r) => r.toLowerCase() === pub)) {
     throw new Error('migrate-world: publicTarget must name one of the world repositories: ' + publicTarget);
   }
   const isPrivate = (full) => pub !== full.toLowerCase();
 
-  const einher = createFakeGitHub({
+  const elmwood = createFakeGitHub({
     repo: SOURCE, ownerType: 'user', isPrivate: isPrivate(SOURCE), login: 'Elmwood', statusOptions: true,
     files: { 'board.config.json': JSON.stringify(SETTINGS, null, 2) + '\n' },
   });
-  const blast = createFakeGitHub({
-    repo: WL, ownerType: 'organization', isPrivate: isPrivate(WL), login: 'Elmwood', statusOptions: true, dueShift: true, // targets store due_on as GitHub does (15 Oct)
+  const brightcraft = createFakeGitHub({
+    repo: WOODSHOP, ownerType: 'organization', isPrivate: isPrivate(WOODSHOP), login: 'Elmwood', statusOptions: true, dueShift: true, // targets store due_on as GitHub does (15 Oct)
     // a public book is the only way to meet it before apply: it is made to exist, public
     repos: pub === BOOK ? [{ name: BOOK, private: false }] : [],
   });
-  const in2 = createFakeGitHub({
-    repo: IN2, ownerType: 'organization', isPrivate: isPrivate(IN2), login: 'Elmwood', statusOptions: true, dueShift: true,
+  const inkPress = createFakeGitHub({
+    repo: INKPRESS, ownerType: 'organization', isPrivate: isPrivate(INKPRESS), login: 'Elmwood', statusOptions: true, dueShift: true,
   });
-  const fakes = { Elmwood: einher, brightcraft: blast, inkPress: in2 };
+  const fakes = { Elmwood: elmwood, brightcraft, inkPress };
 
   // ---- seed the source (quietly: seeding is not a call) ----
-  const rq = (m, p, b) => einher.direct.request(m, p, b);
-  const gq = (q, v) => einher.direct.graphql(q, v);
+  const rq = (m, p, b) => elmwood.direct.request(m, p, b);
+  const gq = (q, v) => elmwood.direct.graphql(q, v);
   rq('POST', `/repos/${SOURCE}/labels`, { name: 'DO', color: '0E8A16' });
   rq('POST', `/repos/${SOURCE}/labels`, { name: 'idea', color: 'FBCA04' });
   for (const title of ['Woodshop · Launch', 'inkPress · Pilot', 'Someday']) {
@@ -68,10 +68,10 @@ export function createMigrateWorld({ publicTarget } = {}) {
   const titles = ['Woodshop', 'inkPress', 'BOOK', 'Road'];
   titles.forEach((t) => {
     const p = gq('mutation { createProjectV2(input: {}) { projectV2 { id } } }', { ownerId: 'O_1', title: t }).createProjectV2.projectV2;
-    const pj = einher.state.projects.find((x) => x.number === p.number);
+    const pj = elmwood.state.projects.find((x) => x.number === p.number);
     gq('mutation { createProjectV2Field(input: {}) { projectV2Field { id } } }', { projectId: pj.node_id, name: 'Due', dataType: 'DATE' });
   });
-  const projectOf = (n) => einher.state.projects.find((x) => x.number === n);
+  const projectOf = (n) => elmwood.state.projects.find((x) => x.number === n);
   const add = (pn, num) => {
     rq('POST', `/users/Elmwood/projectsV2/${pn}/items`, { type: 'Issue', owner: 'Elmwood', repo: 'howgozit', number: num });
     return projectOf(pn).items.find((it) => it.content.number === num);
@@ -86,8 +86,8 @@ export function createMigrateWorld({ publicTarget } = {}) {
     { projectId: projectOf(1).node_id, itemId: onP1.node_id, fieldId: fieldOf(projectOf(1), 'Status').node_id, status: 'Doing' });
   gq('mutation { updateProjectV2ItemFieldValue(input: {}) { projectV2Item { id } } }',
     { projectId: projectOf(1).node_id, itemId: onP1.node_id, fieldId: fieldOf(projectOf(1), 'Due').node_id, date: '2026-11-01' });
-  einher.seedComment(SOURCE, 1, { login: 'Elmwood', body: 'First note on the pricing page.', created_at: '2026-10-02T09:30:00Z' });
-  einher.seedComment(SOURCE, 1, { login: 'helper-bot', body: 'Second note, from someone else.', created_at: '2026-10-03T22:45:00Z' });
+  elmwood.seedComment(SOURCE, 1, { login: 'Elmwood', body: 'First note on the pricing page.', created_at: '2026-10-02T09:30:00Z' });
+  elmwood.seedComment(SOURCE, 1, { login: 'helper-bot', body: 'Second note, from someone else.', created_at: '2026-10-03T22:45:00Z' });
   for (const f of Object.values(fakes)) f.calls.length = 0;
 
   // ---- routing and the shared, owner-tagged call log ----
@@ -135,8 +135,8 @@ export function createMigrateWorld({ publicTarget } = {}) {
     version: 1,
     source: SOURCE,
     projects: {
-      woodshop: { old: { owner: 'Elmwood', number: 1 }, home: WL, projectOwner: 'brightcraft' },
-      inkpress: { old: { owner: 'Elmwood', number: 2 }, home: IN2, projectOwner: 'inkPress' },
+      woodshop: { old: { owner: 'Elmwood', number: 1 }, home: WOODSHOP, projectOwner: 'brightcraft' },
+      inkpress: { old: { owner: 'Elmwood', number: 2 }, home: INKPRESS, projectOwner: 'inkPress' },
       'bookshelf-planner': { old: { owner: 'Elmwood', number: 3 }, home: BOOK, projectOwner: 'brightcraft' },
       'road-to-a-garden': { old: { owner: 'Elmwood', number: 4 }, home: SOURCE, projectOwner: 'Elmwood' },
     },

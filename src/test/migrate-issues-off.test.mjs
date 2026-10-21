@@ -10,7 +10,7 @@ import { createMigrateWorld } from '../fixtures/migrate-world.mjs';
 
 const TOKEN = 'ghp_' + 'e'.repeat(36);
 const SOURCE = 'Elmwood/howgozit';
-const IN2 = 'inkPress/inkPress';
+const INKPRESS = 'inkPress/inkPress';
 
 async function setup(t) {
   const dir = await mkdtemp(join(tmpdir(), 'migrate-issues-off-'));
@@ -34,11 +34,11 @@ async function setup(t) {
 }
 const exists = (p) => access(p).then(() => true, () => false);
 const writesOf = (world) => world.calls().filter((c) => c.method !== 'GET');
-const SENTENCE = `${IN2} has Issues switched off; turn them on in its Settings, then run plan again.`;
+const SENTENCE = `${INKPRESS} has Issues switched off; turn them on in its Settings, then run plan again.`;
 
 test('U plan refuses a target with Issues switched off that receives a moving issue', async (t) => {
   const s = await setup(t);
-  s.world.fakes.inkPress.setHasIssues(IN2, false);
+  s.world.fakes.inkPress.setHasIssues(INKPRESS, false);
   const r = await s.run('plan');
   assert.equal(r.code, 1, r.all.join('\n'));
   assert.ok(r.all.some((l) => l.includes(SENTENCE)), r.all.join('\n'));
@@ -48,7 +48,7 @@ test('U plan refuses a target with Issues switched off that receives a moving is
 
 test('U plan does not refuse a target with Issues switched off that receives no moving issue', async (t) => {
   const s = await setup(t);
-  s.world.fakes.inkPress.setHasIssues(IN2, false);
+  s.world.fakes.inkPress.setHasIssues(INKPRESS, false);
   // the only open card for inkPress is #3; closed, it stays as history and nothing moves there
   s.world.fakes.Elmwood.direct.request('PATCH', `/repos/${SOURCE}/issues/3`, { state: 'closed' });
   const r = await s.run('plan');

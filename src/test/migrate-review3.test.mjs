@@ -12,7 +12,7 @@ import { GitHubError } from '../board/github/http.mjs';
 
 const TOKEN = 'ghp_' + 'd'.repeat(36);
 const SOURCE = 'Elmwood/howgozit';
-const WLPT = 'brightcraft/blastworks-Woodshop';
+const WOODSHOP = 'brightcraft/Woodshop-site';
 const BOOK = 'brightcraft/book';
 const ownerOf = (repo) => repo.split('/')[0];
 const FROM = (n) => `<!-- howgozit-migrated-from: ${SOURCE}#${n} -->`;
@@ -90,7 +90,7 @@ const emptyKey = (s) => {
 };
 const retarget = async (s) => {
   const map = JSON.parse(await readFile(s.mapPath, 'utf8'));
-  map.projects.inkpress.home = WLPT; // another existing private repo and owner
+  map.projects.inkpress.home = WOODSHOP; // another existing private repo and owner
   map.projects.inkpress.projectOwner = 'brightcraft';
   await writeFile(s.mapPath, JSON.stringify(map));
 };
@@ -150,14 +150,14 @@ test('U R3-2 a resume after a partial apply (targets made, then a failed write) 
   const s = await setup(t);
   await planned(s);
   // the first copy POST into the Woodshop repo fails once: targets (repo, Projects, labels, goals) already exist by then
-  s.world.fakes.brightcraft.fail({ method: 'POST', path: /\/repos\/brightcraft\/blastworks-Woodshop\/issues$/ }, new GitHubError('network', 0));
+  s.world.fakes.brightcraft.fail({ method: 'POST', path: /\/repos\/brightcraft\/Woodshop-site\/issues$/ }, new GitHubError('network', 0));
   const first = await s.run('apply');
   assert.equal(first.code, 1, first.all.join('\n'));
   assert.ok(projectOf(s.world, 'brightcraft', 'Woodshop'), 'the targets were created before the stop');
   const second = await s.run('apply');
   assert.equal(second.code, 0, second.all.join('\n'));
   assert.ok(!second.all.join('\n').includes('The board changed after the plan was made'), 'no false digest refusal');
-  await copyOf(s.world, WLPT, 1);
+  await copyOf(s.world, WOODSHOP, 1);
 });
 
 test('U R3-3 a cold apply carries Status and Due onto the copy while the target Projects\' items list lags, never asking the list', async (t) => {
@@ -170,8 +170,8 @@ test('U R3-3 a cold apply carries Status and Due onto the copy while the target 
   const a = await s.run('apply');
   assert.equal(a.code, 0, a.all.join('\n'));
   assert.ok(!a.all.join('\n').includes('not listed yet'), a.all.join('\n'));
-  const copy = await copyOf(s.world, WLPT, 1);
-  const item = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WLPT, copy.number);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
+  const item = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WOODSHOP, copy.number);
   assert.ok(item, 'the copy is on the new Project');
   assert.equal(item.status, 'In Progress', 'Status carried (Doing becomes In Progress)');
   assert.equal(item.due, '2026-11-01', 'Due carried');

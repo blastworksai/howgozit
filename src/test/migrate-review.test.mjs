@@ -13,9 +13,9 @@ import { GitHubError } from '../board/github/http.mjs';
 
 const TOKEN = 'ghp_' + 'b'.repeat(36);
 const SOURCE = 'Elmwood/howgozit';
-const WLPT = 'brightcraft/blastworks-Woodshop';
+const WOODSHOP = 'brightcraft/Woodshop-site';
 const BOOK = 'brightcraft/book';
-const IN2 = 'inkPress/inkPress';
+const INKPRESS = 'inkPress/inkPress';
 const ownerOf = (repo) => repo.split('/')[0];
 const FROM = (n) => `<!-- howgozit-migrated-from: ${SOURCE}#${n} -->`;
 const FUTURE = '2099-01-01T00:00:00.000Z';
@@ -81,18 +81,18 @@ const readJson = async (s, name) => JSON.parse(await readFile(join(s.outDir, nam
 const assertGone = (world, n) => assert.rejects(world.fakes.Elmwood.http.get(`/repos/${SOURCE}/issues/${n}`), (e) => e.status === 410, `#${n} reads back 410`);
 
 // inkpress shares Woodshop's home, and #1 sits on both old boards with its own Due on each (F7, F8)
-const sharedHome = (map) => { map.projects.inkpress.home = WLPT; map.projects.inkpress.projectOwner = 'brightcraft'; };
+const sharedHome = (map) => { map.projects.inkpress.home = WOODSHOP; map.projects.inkpress.projectOwner = 'brightcraft'; };
 function secondBoard(world, due) {
-  const einher = world.fakes.Elmwood;
-  einher.direct.request('POST', '/users/Elmwood/projectsV2/2/items', { type: 'Issue', owner: 'Elmwood', repo: 'howgozit', number: 1 });
+  const elmwood = world.fakes.Elmwood;
+  elmwood.direct.request('POST', '/users/Elmwood/projectsV2/2/items', { type: 'Issue', owner: 'Elmwood', repo: 'howgozit', number: 1 });
   setSourceItem(world, 2, 1, { date: due });
 }
 function setSourceItem(world, projectNumber, issueNumber, value) {
-  const einher = world.fakes.Elmwood;
-  const p = einher.state.projects.find((x) => x.number === projectNumber);
+  const elmwood = world.fakes.Elmwood;
+  const p = elmwood.state.projects.find((x) => x.number === projectNumber);
   const item = p.items.find((it) => it.content.number === issueNumber);
   const field = p.fields.find((f) => f.name === ('date' in value ? 'Due' : 'Status'));
-  einher.direct.graphql('mutation { updateProjectV2ItemFieldValue(input: {}) { projectV2Item { id } } }',
+  elmwood.direct.graphql('mutation { updateProjectV2ItemFieldValue(input: {}) { projectV2Item { id } } }',
     { projectId: p.node_id, itemId: item.node_id, fieldId: field.node_id, ...value });
 }
 
@@ -103,7 +103,7 @@ test('U F1 a recorded copy whose repository the fresh plan changed stops apply w
   s.world.fakes.Elmwood.fail((c) => c.method === 'POST' && /\/repos\/Elmwood\/howgozit\/issues\/\d+\/comments$/.test(c.path), new GitHubError('server', 502));
   const half = await s.run('apply');
   assert.equal(half.code, 1, half.all.join('\n'));
-  await copyOf(s.world, WLPT, 1);
+  await copyOf(s.world, WOODSHOP, 1);
   // the map now sends Woodshop's cards to book
   const mapPath = join(s.dir, 'map.json');
   const map = JSON.parse(await readFile(mapPath, 'utf8'));
@@ -115,8 +115,8 @@ test('U F1 a recorded copy whose repository the fresh plan changed stops apply w
   const again = await s.run('apply');
   assert.equal(again.code, 1, again.all.join('\n'));
   const text = again.all.join('\n');
-  assert.ok(text.includes(`${SOURCE}#1 was copied to ${WLPT} but the plan now sends it to ${BOOK}; move or remove the copy by hand first.`), text);
-  const into = writesOf(s.world, from).filter((c) => c.path.includes(`/repos/${WLPT}`) || c.path.includes(`/repos/${BOOK}`));
+  assert.ok(text.includes(`${SOURCE}#1 was copied to ${WOODSHOP} but the plan now sends it to ${BOOK}; move or remove the copy by hand first.`), text);
+  const into = writesOf(s.world, from).filter((c) => c.path.includes(`/repos/${WOODSHOP}`) || c.path.includes(`/repos/${BOOK}`));
   assert.deepEqual(into, [], 'nothing is written into either repository');
 });
 
@@ -202,8 +202,8 @@ test('U F5 a 422 on a Project add whose message does not say "already" still lea
   const s = await setup(t, { wrap });
   await applied(s);
   assert.ok(fired, 'the 422 was met');
-  const copy = await copyOf(s.world, WLPT, 1);
-  const item = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WLPT, copy.number);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
+  const item = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WOODSHOP, copy.number);
   assert.ok(item, 'the copy is on the new Project');
   assert.equal(item.status, 'In Progress', 'Status was written after the lookup');
   assert.equal(item.due, '2026-11-01', 'Due was written after the lookup');
@@ -212,7 +212,7 @@ test('U F5 a 422 on a Project add whose message does not say "already" still lea
 test('U F6 a copy GitHub accepted but whose answer was lost, and which the listing shows late, is not made twice', async (t) => {
   let lost = false;
   let hideLeft = 0;
-  const isList = (p) => /\/repos\/brightcraft\/blastworks-woodshop\/issues(\?|$)/i.test(String(p));
+  const isList = (p) => /\/repos\/brightcraft\/woodshop-site\/issues(\?|$)/i.test(String(p));
   const hide = (items) => (hideLeft > 0 ? (hideLeft -= 1, items.filter((i) => !endsWith(i, FROM(1)))) : items);
   const wrap = (who, http) => ({
     graphql: http.graphql,
@@ -225,7 +225,7 @@ test('U F6 a copy GitHub accepted but whose answer was lost, and which the listi
       return lost && isList(p) ? { ...res, items: hide(res.items) } : res;
     },
     send: async (m, p, b) => {
-      if (!lost && m === 'POST' && /\/repos\/brightcraft\/blastworks-woodshop\/issues$/i.test(String(p))) {
+      if (!lost && m === 'POST' && /\/repos\/brightcraft\/woodshop-site\/issues$/i.test(String(p))) {
         lost = true;
         hideLeft = 2; // the first two listings after the loss do not show the new issue yet
         await http.send(m, p, b);
@@ -241,7 +241,7 @@ test('U F6 a copy GitHub accepted but whose answer was lost, and which the listi
   const slept = s.clock.sleeps.length;
   const second = await s.run('apply');
   assert.equal(second.code, 0, second.all.join('\n'));
-  await copyOf(s.world, WLPT, 1); // exactly one
+  await copyOf(s.world, WOODSHOP, 1); // exactly one
   assert.ok(s.clock.sleeps.slice(slept).includes(5000), `the re-run waited 5 s before creating again: ${s.clock.sleeps.slice(slept)}`);
   const record = await readJson(s, 'migration-record.json');
   assert.equal(record.done, true);
@@ -251,9 +251,9 @@ test('U F7 an issue on two moving boards with the same home gives each new Proje
   const s = await setup(t, { editMap: sharedHome });
   secondBoard(s.world, '2026-12-05');
   await applied(s);
-  const copy = await copyOf(s.world, WLPT, 1);
-  const first = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WLPT, copy.number);
-  const second = itemOf(projectOf(s.world, 'brightcraft', 'inkPress'), WLPT, copy.number);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
+  const first = itemOf(projectOf(s.world, 'brightcraft', 'Woodshop'), WOODSHOP, copy.number);
+  const second = itemOf(projectOf(s.world, 'brightcraft', 'inkPress'), WOODSHOP, copy.number);
   assert.ok(first && second, 'the copy sits on both new Projects');
   assert.equal(first.due, '2026-11-01');
   assert.equal(second.due, '2026-12-05');
@@ -284,14 +284,14 @@ test('U F8 apply refuses when the Status on the second board changed after the p
 test('U F9 a target milestone that already exists, open and without our marker, stays untouched when the source goal is closed, and verify passes', async (t) => {
   const s = await setup(t);
   s.world.fakes.Elmwood.direct.request('PATCH', `/repos/${SOURCE}/milestones/1`, { state: 'closed' });
-  const pre = s.world.fakes.brightcraft.direct.request('POST', `/repos/${WLPT}/milestones`, { title: 'Launch' });
+  const pre = s.world.fakes.brightcraft.direct.request('POST', `/repos/${WOODSHOP}/milestones`, { title: 'Launch' });
   await applied(s);
-  const launch = (await milestonesOf(s.world, WLPT)).filter((m) => m.title === 'Launch');
+  const launch = (await milestonesOf(s.world, WOODSHOP)).filter((m) => m.title === 'Launch');
   assert.equal(launch.length, 1, 'no second Launch');
   assert.equal(launch[0].number, pre.number);
   assert.equal(launch[0].state, 'open', 'the adopted milestone is never changed');
   assert.ok(!String(launch[0].description || '').includes('howgozit-migrated-from'), 'no marker is written into it');
-  const copy = await copyOf(s.world, WLPT, 1);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
   assert.equal(copy.milestone && copy.milestone.number, pre.number, 'the copy sits in the adopted milestone');
   await verifiedOk(s);
 });
@@ -326,8 +326,8 @@ test('U F11 an original comment that quotes the copy marker in its middle is cop
   await applied(s);
   const originals = (await commentsOf(s.world, SOURCE, 1)).filter((c) => !/howgozit-copied-to/.test(c.body));
   assert.equal(originals.length, 3);
-  const copy = await copyOf(s.world, WLPT, 1);
-  const got = await commentsOf(s.world, WLPT, copy.number);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
+  const got = await commentsOf(s.world, WOODSHOP, copy.number);
   assert.equal(got.length, 4, got.map((c) => c.body).join('\n---\n'));
   assert.equal(got[2].body, `Elmwood wrote on 2026-10-04:\n\n${body}\n\n<!-- howgozit-comment: ${originals[2].id} -->`);
   await verifiedOk(s);
@@ -348,7 +348,7 @@ test('U F13 an empty goal titled exactly like a moving project moves with its ti
   const s = await setup(t);
   const made = s.world.fakes.Elmwood.direct.request('POST', `/repos/${SOURCE}/milestones`, { title: 'Woodshop', description: 'plain goal' });
   await applied(s);
-  const moved = (await milestonesOf(s.world, WLPT)).find((m) => m.title === 'Woodshop');
-  assert.ok(moved, `a goal titled Woodshop in ${WLPT}: ${(await milestonesOf(s.world, WLPT)).map((m) => m.title)}`);
+  const moved = (await milestonesOf(s.world, WOODSHOP)).find((m) => m.title === 'Woodshop');
+  assert.ok(moved, `a goal titled Woodshop in ${WOODSHOP}: ${(await milestonesOf(s.world, WOODSHOP)).map((m) => m.title)}`);
   assert.equal(String(moved.description).split('\n').pop(), `<!-- howgozit-migrated-from: ${SOURCE} milestone ${made.number} -->`);
 });

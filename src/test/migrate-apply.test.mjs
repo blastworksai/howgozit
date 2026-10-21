@@ -12,9 +12,9 @@ import { GitHubError } from '../board/github/http.mjs';
 
 const TOKEN = 'ghp_' + 'a'.repeat(36);
 const SOURCE = 'Elmwood/howgozit';
-const WLPT = 'brightcraft/blastworks-Woodshop';
+const WOODSHOP = 'brightcraft/Woodshop-site';
 const BOOK = 'brightcraft/book';
-const IN2 = 'inkPress/inkPress';
+const INKPRESS = 'inkPress/inkPress';
 const ownerOf = (repo) => repo.split('/')[0];
 const FROM = (n) => `<!-- howgozit-migrated-from: ${SOURCE}#${n} -->`;
 
@@ -96,7 +96,7 @@ async function snapshot(world) {
   const out = {};
   for (const [owner, fake] of Object.entries(world.fakes)) out[owner] = strip(JSON.parse(JSON.stringify(fake.state)));
   out.comments = {};
-  for (const repo of [SOURCE, WLPT, BOOK, IN2]) {
+  for (const repo of [SOURCE, WOODSHOP, BOOK, INKPRESS]) {
     let issues = [];
     try { issues = await issuesOf(world, repo); } catch { continue; }
     for (const i of issues) out.comments[`${repo}#${i.number}`] = strip(await commentsOf(world, repo, i.number));
@@ -107,7 +107,7 @@ async function snapshot(world) {
 test('U apply cold start copies #1 into the Woodshop repo with its marker, labels, goal and open state', async (t) => {
   const s = await cold(t);
   const orig = (await issuesOf(s.world, SOURCE)).find((i) => i.number === 1);
-  const copy = await copyOf(s.world, WLPT, 1);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
   assert.equal(copy.title, orig.title);
   assert.equal(copy.body, `${orig.body}\n\n${FROM(1)}`);
   assert.ok(copy.labels.some((l) => l.name.toLowerCase() === 'do'), JSON.stringify(copy.labels));
@@ -120,8 +120,8 @@ test('U apply cold start copies the two comments of #1 with headers, then the li
   const s = await cold(t);
   const origComments = (await commentsOf(s.world, SOURCE, 1)).filter((c) => !/howgozit-copied-to/.test(c.body));
   assert.equal(origComments.length, 2);
-  const copy = await copyOf(s.world, WLPT, 1);
-  const got = await commentsOf(s.world, WLPT, copy.number);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
+  const got = await commentsOf(s.world, WOODSHOP, copy.number);
   assert.equal(got.length, 3, got.map((c) => c.body).join('\n---\n'));
   origComments.forEach((c, i) => {
     const login = (c.user && c.user.login) || 'ghost';
@@ -133,10 +133,10 @@ test('U apply cold start copies the two comments of #1 with headers, then the li
 
 test('U apply cold start puts the copy of #1 on the new Woodshop Project with Status In Progress and its Due date', async (t) => {
   const s = await cold(t);
-  const copy = await copyOf(s.world, WLPT, 1);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
   const p = projectOf(s.world, 'brightcraft', 'Woodshop');
   assert.ok(p, 'the Woodshop Project exists under brightcraft');
-  const item = itemOf(p, WLPT, copy.number);
+  const item = itemOf(p, WOODSHOP, copy.number);
   assert.ok(item, 'the copy is an item of the new Project');
   assert.equal(item.status, 'In Progress');
   assert.equal(item.due, '2026-11-01');
@@ -144,7 +144,7 @@ test('U apply cold start puts the copy of #1 on the new Woodshop Project with St
 
 test('U apply cold start creates the org Projects with a Due field, linked to their home repositories', async (t) => {
   const s = await cold(t);
-  for (const [owner, title, home] of [['brightcraft', 'Woodshop', WLPT], ['brightcraft', 'BOOK', BOOK], ['inkPress', 'inkPress', IN2]]) {
+  for (const [owner, title, home] of [['brightcraft', 'Woodshop', WOODSHOP], ['brightcraft', 'BOOK', BOOK], ['inkPress', 'inkPress', INKPRESS]]) {
     const p = projectOf(s.world, owner, title);
     assert.ok(p, `Project "${title}" under ${owner}`);
     const due = p.fields.find((f) => f.name === 'Due');
@@ -180,10 +180,10 @@ test('U apply cold start holds #4 in the new Ideas Project and gives Habits a nu
 
 test('U apply cold start copies #3 into inkPress/inkPress with no milestone, on the inkPress Project', async (t) => {
   const s = await cold(t);
-  const copy = await copyOf(s.world, IN2, 3);
+  const copy = await copyOf(s.world, INKPRESS, 3);
   assert.equal(copy.milestone ?? null, null);
   const p = projectOf(s.world, 'inkPress', 'inkPress');
-  assert.ok(itemOf(p, IN2, copy.number));
+  assert.ok(itemOf(p, INKPRESS, copy.number));
 });
 
 test('U apply cold start copies the goals with the prefix stripped, the marker, the due date and "Pilot" into inkPress/inkPress', async (t) => {
@@ -192,11 +192,11 @@ test('U apply cold start copies the goals with the prefix stripped, the marker, 
   const launch = src.find((m) => m.title === 'Woodshop · Launch');
   const pilot = src.find((m) => m.title === 'inkPress · Pilot');
   assert.ok(launch && pilot, 'the source still holds its goals');
-  const l = (await milestonesOf(s.world, WLPT)).find((m) => m.title === 'Launch');
+  const l = (await milestonesOf(s.world, WOODSHOP)).find((m) => m.title === 'Launch');
   assert.ok(l, 'Launch in the Woodshop repo');
   assert.equal(l.due_on, launch.due_on);
   assert.equal(String(l.description).split('\n').pop(), `<!-- howgozit-migrated-from: ${SOURCE} milestone ${launch.number} -->`);
-  const p = (await milestonesOf(s.world, IN2)).find((m) => m.title === 'Pilot');
+  const p = (await milestonesOf(s.world, INKPRESS)).find((m) => m.title === 'Pilot');
   assert.ok(p, 'Pilot in inkPress/inkPress');
   assert.equal(String(p.description).split('\n').pop(), `<!-- howgozit-migrated-from: ${SOURCE} milestone ${pilot.number} -->`);
 });
@@ -204,12 +204,12 @@ test('U apply cold start copies the goals with the prefix stripped, the marker, 
 test('U apply cold start leaves "Someday" in the source and copies no milestone with that name', async (t) => {
   const s = await cold(t);
   assert.ok((await milestonesOf(s.world, SOURCE)).some((m) => m.title === 'Someday'));
-  for (const repo of [WLPT, BOOK, IN2]) assert.ok(!(await milestonesOf(s.world, repo)).some((m) => m.title === 'Someday'), repo);
+  for (const repo of [WOODSHOP, BOOK, INKPRESS]) assert.ok(!(await milestonesOf(s.world, repo)).some((m) => m.title === 'Someday'), repo);
 });
 
 test('U apply cold start creates the four mode labels in a home repo that receives a copy', async (t) => {
   const s = await cold(t);
-  const names = (await labelsOf(s.world, WLPT)).map((l) => l.name.toUpperCase());
+  const names = (await labelsOf(s.world, WOODSHOP)).map((l) => l.name.toUpperCase());
   for (const mode of ['DO', 'THINK', 'REVIEW', 'LAUNCH']) assert.ok(names.includes(mode), `${mode} in ${names.join(',')}`);
 });
 
@@ -220,7 +220,7 @@ test('U apply cold start comments on each moved original and on nothing that sta
   assert.equal((await s.run('plan')).code, 0);
   const a = await s.run('apply');
   assert.equal(a.code, 0, a.all.join('\n'));
-  for (const [n, repo] of [[1, WLPT], [3, IN2], [6, BOOK]]) {
+  for (const [n, repo] of [[1, WOODSHOP], [3, INKPRESS], [6, BOOK]]) {
     const copy = await copyOf(s.world, repo, n);
     const got = await commentsOf(s.world, SOURCE, n);
     assert.equal(got.length, before[n] + 1, `#${n}`);
@@ -235,7 +235,7 @@ test('U apply cold start keeps closed #2 in the source with no copy anywhere', a
   const s = await cold(t);
   const two = (await issuesOf(s.world, SOURCE)).find((i) => i.number === 2);
   assert.equal(two.state, 'closed');
-  for (const repo of [WLPT, BOOK, IN2]) assert.ok(!(await issuesOf(s.world, repo)).some((i) => endsWith(i, FROM(2))), repo);
+  for (const repo of [WOODSHOP, BOOK, INKPRESS]) assert.ok(!(await issuesOf(s.world, repo)).some((i) => endsWith(i, FROM(2))), repo);
   const p = projectOf(s.world, 'brightcraft', 'Woodshop');
   assert.equal(p.items.length, 1, 'only the open card #1 is on the new Woodshop Project');
 });
@@ -270,11 +270,11 @@ test('U apply writes board.config.next.json that passes checkSettings and names 
   const wl = byKey('woodshop');
   assert.ok(wl, 'woodshop is carried');
   assert.equal(wl.owner, 'brightcraft');
-  assert.equal(wl.home, WLPT);
+  assert.equal(wl.home, WOODSHOP);
   assert.equal(wl.number, projectOf(s.world, 'brightcraft', 'Woodshop').number);
   assert.ok(byKey('inkpress'), 'inkpress is carried');
   assert.equal(byKey('inkpress').owner, 'inkPress');
-  assert.equal(byKey('inkpress').home, IN2);
+  assert.equal(byKey('inkpress').home, INKPRESS);
   assert.deepEqual(next.modes, ['DO', 'THINK', 'REVIEW', 'LAUNCH']);
   assert.equal(next.ideas.owner, 'Elmwood');
   assert.equal(next.ideas.number, projectOf(s.world, 'Elmwood', 'Ideas').number);
@@ -322,7 +322,7 @@ test('U apply resumes after a failed 5th write with no duplicate and the same en
 
   const second = await s.run('apply');
   assert.equal(second.code, 0, second.all.join('\n'));
-  for (const [repo, n] of [[WLPT, 1], [IN2, 3], [BOOK, 6]]) await copyOf(s.world, repo, n);
+  for (const [repo, n] of [[WOODSHOP, 1], [INKPRESS, 3], [BOOK, 6]]) await copyOf(s.world, repo, n);
   assert.deepEqual(await snapshot(s.world), expected);
   assert.ok(await exists(join(s.outDir, 'board.config.next.json')));
 });
@@ -330,17 +330,17 @@ test('U apply resumes after a failed 5th write with no duplicate and the same en
 test('U apply adopts an issue already copied with its marker but not in the record, with no second POST', async (t) => {
   const s = await setup(t);
   const orig = (await issuesOf(s.world, SOURCE)).find((i) => i.number === 1);
-  const made = await s.world.fakes.brightcraft.http.send('POST', `/repos/${WLPT}/issues`, { title: orig.title, body: `${orig.body}\n\n${FROM(1)}` });
+  const made = await s.world.fakes.brightcraft.http.send('POST', `/repos/${WOODSHOP}/issues`, { title: orig.title, body: `${orig.body}\n\n${FROM(1)}` });
   assert.ok(made.number, 'the pre-made copy exists');
   assert.equal((await s.run('plan')).code, 0);
   const from = s.world.calls().length;
   const a = await s.run('apply');
   assert.equal(a.code, 0, a.all.join('\n'));
-  const posts = s.world.calls().slice(from).filter((c) => c.method === 'POST' && new RegExp(`/repos/${WLPT}/issues$`).test(c.path));
+  const posts = s.world.calls().slice(from).filter((c) => c.method === 'POST' && new RegExp(`/repos/${WOODSHOP}/issues$`).test(c.path));
   assert.equal(posts.length, 0, 'no second copy is posted');
-  const copy = await copyOf(s.world, WLPT, 1);
+  const copy = await copyOf(s.world, WOODSHOP, 1);
   assert.equal(copy.number, made.number);
-  const comments = await commentsOf(s.world, WLPT, copy.number);
+  const comments = await commentsOf(s.world, WOODSHOP, copy.number);
   assert.ok(comments.some((c) => c.body.includes('<!-- howgozit-link-to-original -->')), 'the adopted copy still gets its link comment');
   const record = JSON.parse(await readFile(join(s.outDir, 'migration-record.json'), 'utf8'));
   assert.ok(record.issues.some((i) => String(i.copy).endsWith(`#${made.number}`) || (i.copy && i.copy.number === made.number)), 'the adoption is recorded');

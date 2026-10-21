@@ -71,7 +71,7 @@ test('U plan moves the open card of the Woodshop board to its home with its Proj
   const r = await s.run('plan');
   const line = r.lines.find((l) => l.startsWith(`${SOURCE}#1 →`));
   assert.ok(line, r.lines.join('\n'));
-  assert.ok(line.includes('brightcraft/blastworks-Woodshop'), line);
+  assert.ok(line.includes('brightcraft/Woodshop-site'), line);
   assert.ok(line.includes('Project "Woodshop" (brightcraft)'), line);
   assert.ok(line.includes('2 comments'), line);
 });
@@ -91,7 +91,7 @@ test('U plan sends the card with no goal to its own board home', async (t) => {
 test('U plan strips the project prefix from the goal title it moves', async (t) => {
   const s = await setup(t);
   const r = await s.run('plan');
-  assert.ok(has(r.lines, 'Goal "Woodshop · Launch" → brightcraft/blastworks-Woodshop as "Launch"'), r.lines.join('\n'));
+  assert.ok(has(r.lines, 'Goal "Woodshop · Launch" → brightcraft/Woodshop-site as "Launch"'), r.lines.join('\n'));
 });
 
 test('U plan moves the empty goal "inkPress · Pilot" to inkPress/inkPress as "Pilot"', async (t) => {
@@ -110,7 +110,7 @@ test('U plan lists the targets to create and the idea to add, and does not list 
   const s = await setup(t);
   const r = await s.run('plan');
   assert.ok(has(r.lines, 'To create: repository brightcraft/book (private)'), r.lines.join('\n'));
-  assert.ok(has(r.lines, 'To create: Project "Woodshop" under brightcraft, with a Due date field, linked to brightcraft/blastworks-Woodshop'), r.lines.join('\n'));
+  assert.ok(has(r.lines, 'To create: Project "Woodshop" under brightcraft, with a Due date field, linked to brightcraft/Woodshop-site'), r.lines.join('\n'));
   assert.ok(has(r.lines, 'To create: Project "Habits" under Elmwood, with a number field Score'), r.lines.join('\n'));
   assert.ok(has(r.lines, `To add to Ideas: ${SOURCE}#4`), r.lines.join('\n'));
   assert.ok(!r.lines.some((l) => l.startsWith(`${SOURCE}#5 →`)), '#5 sits on a staying board');
