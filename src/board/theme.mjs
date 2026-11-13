@@ -90,7 +90,26 @@ export function resolveTheme(input) {
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 
 const WEIGHTS = { heading: 'wght@800', body: 'wght@400;500;600', mono: 'wght@400;500' };
-const FALLBACK = { heading: 'system-ui, sans-serif', body: 'system-ui, sans-serif', mono: 'ui-monospace, monospace' };
+// R84: the three system stacks, written exactly.
+const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const FALLBACK = {
+  heading: SANS,
+  body: SANS,
+  mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+};
+
+// R175: WCAG relative luminance and contrast, to pick the text colour that sits on the accent.
+const channel = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+function luminance(hex) {
+  let h = hex.slice(1);
+  if (h.length === 3) h = [...h].map((c) => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map((i) => channel(parseInt(h.slice(i, i + 2), 16) / 255));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
 
 // R164: mailbox pill colours. Fill and ink are a fixed pair, each at least 4.5:1, so a pill is legible on any theme.
 export const MAILBOX_COLOURS = {
@@ -127,7 +146,12 @@ export function themeCss(theme) {
     vars['--' + kebab(k)] = isHexColor(v) ? v : DEFAULT_THEME.colors[k];
   }
 
-  const system = own(fonts, 'source') === 'system';
+  // A derived variable, not a theme key; it follows the resolved colours (a bad colour counts as its default).
+  vars['--on-accent'] = contrast(vars['--accent'], vars['--ground']) > contrast(vars['--accent'], vars['--ink'])
+    ? vars['--ground'] : vars['--ink'];
+
+  // R84: anything but google (an unknown source, or none) is system.
+  const system = own(fonts, 'source') !== 'google';
   const names = {};
   for (const role of FONT_ROLES) {
     const v = own(fonts, role);

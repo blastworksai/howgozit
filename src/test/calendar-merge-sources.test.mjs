@@ -77,6 +77,9 @@ const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const count = (s, re) => (s.match(re) || []).length;
 const hrefs = (html) => [...html.matchAll(/\shref\s*=\s*"([^"]*)"/gi)].map((m) => m[1]);
 
+// A broken card carries the class panel-error as one token among others (PART-MAP C6), on whatever element.
+const hasPanelError = (s) => /class="[^"]*\bpanel-error\b[^"]*"/.test(s);
+
 // The calendar section of a page, from its opening tag to the next section (or the end).
 function calendarSection(html) {
   const marks = [...html.matchAll(/data-section="([^"]+)"/g)].map((m) => ({ name: m[1], start: html.lastIndexOf('<', m.index) }));
@@ -300,7 +303,7 @@ for (const [name, file] of bad) {
     assert.equal(v.calSource.state, 'stale');
     assertRaised(v, [{ code: 'calendar-file-unreadable', count: 1 }], true);
     assert.equal(v.html.includes('Dentist'), true);
-    assert.equal(calendarSection(v.html).includes('class="panel-error"'), false, 'the broken card is shown although iCloud answered');
+    assert.equal(hasPanelError(calendarSection(v.html)), false, 'the broken card is shown although iCloud answered');
     assert.equal(elementsWith(calendarSection(v.html), 'data-source').map((e) => e.text).join(), 'iCloud');
   });
 }
@@ -319,7 +322,7 @@ test('R113 failing iCloud (no sign-in) and a good file: the file\'s events, stal
   assert.equal(v.panel.stale, true);
   assert.equal(v.calSource.state, 'stale');
   assertRaised(v, [{ code: 'calendar-no-login', count: 1 }], false);
-  assert.equal(calendarSection(v.html).includes('class="panel-error"'), false, 'the broken card is shown although the file is good');
+  assert.equal(hasPanelError(calendarSection(v.html)), false, 'the broken card is shown although the file is good');
   assert.equal(v.html.includes('Standup'), true);
   assert.equal(s.fake.calls.length, 0, 'Apple was asked without a sign-in');
 });
@@ -345,7 +348,7 @@ test('R113 iCloud failing after a good read earlier today, and a good file: thos
   assert.equal(v.panel.stale, true);
   assert.equal(v.calSource.state, 'stale');
   assertRaised(v, [{ code: 'calendar-unreachable', count: 1 }], false);
-  assert.equal(calendarSection(v.html).includes('class="panel-error"'), false);
+  assert.equal(hasPanelError(calendarSection(v.html)), false);
 });
 
 test('R113 iCloud failing after a good read and an unreadable file: the kept iCloud events are shown, both warnings once', async () => {
@@ -367,7 +370,7 @@ test('R113 both sources failing: the broken panel from icloud, source error, bot
   assert.equal(v.calSource.state, 'error');
   assertRaised(v, [{ code: 'calendar-file-unreadable', count: 1 }, { code: 'calendar-no-login', count: 1 }], true);
   const cal = calendarSection(v.html);
-  assert.equal(cal.includes('class="panel-error"'), true);
+  assert.equal(hasPanelError(cal), true);
   assert.equal(cal.includes('The calendar could not be read from iCloud. See the note at the foot of the page.'), true);
 });
 

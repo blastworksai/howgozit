@@ -15,6 +15,10 @@ const HOUR = 3600 * 1000;
 
 const CSP_FONTS = (n) =>
   `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${n}' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`;
+const CSP_SYSTEM = (n) =>
+  `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${n}'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`;
+const CSP_PLAIN =
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 const HEADER_NAMES = ['content-security-policy', 'x-content-type-options', 'referrer-policy', 'cache-control'];
 
 function ghError() {
@@ -23,7 +27,7 @@ function ghError() {
 
 // ---------- the harness ----------
 
-function setup({ readOnly = false, ownerType = 'organization' } = {}) {
+function setup({ readOnly = false, ownerType = 'organization', themeFile = null } = {}) {
   resetNumbers();
   const events = [];
   const world = {
@@ -58,7 +62,7 @@ function setup({ readOnly = false, ownerType = 'organization' } = {}) {
           savedAt: NOW,
           raw: world.raw,
           settings: world.settings,
-          theme: resolveTheme(null).theme,
+          theme: resolveTheme(themeFile).theme,
           state: world.state,
           run: { stale: world.stale, readOnly, warnings: [] },
         },
@@ -158,10 +162,10 @@ test('R77 with no nonce the style source is the page itself, plus the font host 
   assert.ok(withFonts.includes('font-src https://fonts.gstatic.com'));
 });
 
-test('R77 the other three headers are nosniff, no-referrer and no-store', () => {
+test('R77 the other three headers are nosniff, same-origin and no-store', () => {
   const hd = securityHeaders({ nonce: 'N' });
   assert.equal(hd['x-content-type-options'], 'nosniff');
-  assert.equal(hd['referrer-policy'], 'no-referrer');
+  assert.equal(hd['referrer-policy'], 'same-origin');
   assert.equal(hd['cache-control'], 'no-store');
 });
 
@@ -171,10 +175,51 @@ test('R77 the page answer carries all four headers and the right content type', 
   assert.equal(res.status, 200);
   for (const n of HEADER_NAMES) assert.ok(res.headers[n], `page has ${n}`);
   assert.equal(res.headers['x-content-type-options'], 'nosniff');
-  assert.equal(res.headers['referrer-policy'], 'no-referrer');
+  assert.equal(res.headers['referrer-policy'], 'same-origin');
   assert.equal(res.headers['cache-control'], 'no-store');
   assert.ok(res.headers['content-security-policy'].includes("'nonce-NONCE123'"));
   assert.equal(res.headers['content-type'], 'text/html; charset=utf-8');
+});
+
+test('R77 the default page carries policy 3 exactly (system fonts, no skin) and links no font stylesheet', async () => {
+  const s = setup();
+  const res = await s.h.page(getReq());
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['content-security-policy'], CSP_SYSTEM('NONCE123'));
+  assert.ok(!res.headers['content-security-policy'].includes('fonts.'), 'no font host');
+  assert.ok(!res.headers['content-security-policy'].includes('font-src'), 'no font-src without a skin font');
+  assert.ok(!res.body.includes('fonts.googleapis.com'), 'no font link in the default page');
+  assert.ok(!res.body.includes('fonts.gstatic.com'));
+  assert.equal((res.body.match(/https:\/\/(?!github\.com\/)/g) || []).length, 0, 'no outside address beyond GitHub links');
+});
+
+test('R77 a theme with google fonts gets policy 1 exactly and one font stylesheet link', async () => {
+  const s = setup({ themeFile: { fonts: { source: 'google' } } });
+  const res = await s.h.page(getReq());
+  assert.equal(res.headers['content-security-policy'], CSP_FONTS('NONCE123'));
+  assert.equal((res.body.match(/<link[^>]*href="https:\/\/fonts\.googleapis\.com\/css2/g) || []).length, 1);
+});
+
+test('R77 a notice answer carries policy 3 with its own nonce, a nonce style block and no script', async () => {
+  const s = setup();
+  s.world.notice = { title: 'No settings file found', message: 'Run the setup step.', status: 503 };
+  const res = await s.h.page(getReq());
+  const csp = res.headers['content-security-policy'];
+  const n = /'nonce-([^']+)'/.exec(csp);
+  assert.ok(n, 'the notice policy names a nonce');
+  assert.equal(csp, CSP_SYSTEM(n[1]));
+  const style = new RegExp(`<style nonce="${n[1]}">`).exec(res.body);
+  assert.ok(style, 'the notice carries a style block with the policy nonce');
+  assert.equal((res.body.match(/<style\b/g) || []).length, 1);
+  assert.equal((res.body.match(/<script/g) || []).length, 0, 'a notice page runs no script');
+  assert.equal(res.headers['cache-control'], 'no-store');
+});
+
+test('R77 a redirect carries the plain policy: no nonce, no font-src, no font host', async () => {
+  const s = setup();
+  const res = await act(s, 'idea', forms.idea(s));
+  assert.equal(res.status, 303);
+  assert.equal(res.headers['content-security-policy'], CSP_PLAIN);
 });
 
 test('R77 a notice answer and a refusal answer carry all four headers', async () => {

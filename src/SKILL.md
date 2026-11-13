@@ -293,15 +293,19 @@ It removes only what `setup-undo.json` lists: the labels, projects, stages, the 
 It does not remove the repository, the token, anything the person added later, or anything the record does not list.
 If a project or stage now holds cards the person added, it stops and removes nothing at all, and says what else would go. Only if the person insists, run it with `--force`, and say what went.
 
-### Fonts
+### Look and fonts
 
-The default look loads its fonts from Google on every page view. A person who does not want that switches it off in `theme.json` at the root of their repository:
+The board has a neutral dark look, with cut corners and system fonts, and the page then makes no outside request at all.
+A person who wants Google's fonts sets them in `theme.json` at the root of their repository:
 
 ```json
-{ "fonts": { "source": "system" } }
+{ "fonts": { "source": "google" } }
 ```
 
-The page then uses the fonts already on the person's device. The whole file is optional. Colours and other choices are listed in `references/contract.md` under "Theme".
+The whole file is optional.
+Colours and other choices, including `radius` (the size of the corner cut; 0 gives square corners), are listed in `references/contract.md` under "Theme".
+A person who wants a look of their own can use a skin: a private folder on the board's computer, named by `BOARD_SKIN_DIR`, that holds one stylesheet, up to six fonts and up to twelve images.
+Offer it only if they ask for a different look. Never set it up unasked. The guide is `references/skins.md`.
 
 ## When something goes wrong
 

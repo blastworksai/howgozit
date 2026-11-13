@@ -15,6 +15,7 @@ import { createCalendarSource } from './calendar/icloud.mjs';
 import { createGoogleSource } from './calendar/google.mjs';
 import { createGuard } from './guard.mjs';
 import { createHandlers, securityHeaders } from './handlers.mjs';
+import { loadSkin } from './skin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..');
@@ -84,7 +85,21 @@ function parseForm(text) {
   return form;
 }
 
-export function createApp({ handlers, guard, log = () => {}, staticFiles } = {}) {
+// R80, R169, R170: a skin answer. The body is the file's bytes from the list built at start; headers follow R77 and R170.
+function skinAnswer(res, f) {
+  const headers = { ...securityHeaders(), 'content-type': f.type };
+  if (f.kind === 'css') {
+    // the stylesheet stays no-store, which securityHeaders already says
+  } else {
+    headers['cache-control'] = 'private, max-age=3600';
+    if (f.type === 'image/svg+xml') headers['content-security-policy'] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; sandbox";
+  }
+  send(res, 200, headers, f.body);
+}
+
+export function createApp({ handlers, guard, log = () => {}, staticFiles, skin } = {}) {
+  // Only a loaded skin has routes; the map is read by exact key and never joined onto a folder.
+  const skinFiles = skin && skin.loaded === true && skin.files instanceof Map ? skin.files : null;
   let files = staticFiles || null;
   const getFiles = () => (files ??= loadStaticFiles());
 
@@ -120,6 +135,11 @@ export function createApp({ handlers, guard, log = () => {}, staticFiles } = {})
       const f = getFiles()[p];
       if (!f) return plain(res, 404, 'Not found.');
       return send(res, 200, { ...securityHeaders(), 'content-type': f.type }, f.body);
+    }
+
+    if (skinFiles !== null && skinFiles.has(p)) {
+      if (method !== 'GET') return plain(res, 405, 'That method is not allowed here.', { allow: 'GET' });
+      return skinAnswer(res, skinFiles.get(p));
     }
 
     if (Object.prototype.hasOwnProperty.call(ACTIONS, p)) {
@@ -188,6 +208,15 @@ export async function start({ processEnv, fetch = globalThis.fetch, clock = { no
     try { log(line); } catch { /* a failing log never stops the start */ }
   }
 
+  // R165 to R168: the skin folder is read once, here. The log line holds a count or a plain sentence, never the path.
+  const skin = loadSkin(env.skinDir);
+  if (env.skinDir !== undefined) {
+    try {
+      log(skin.loaded ? `A skin was loaded (${skin.files.size} file${skin.files.size === 1 ? '' : 's'}).` : 'The skin folder could not be read, so the board starts without a skin.');
+    } catch { /* a failing log never stops the start */ }
+  }
+  const skinForHandlers = { loaded: skin.loaded, hasFonts: skin.hasFonts, warnings: skin.warnings };
+
   const staticFiles = loadStaticFiles();
   let app = (req, res) => plain(res, 503, 'The board is starting.');
   const server = http.createServer((req, res) => app(req, res));
@@ -226,7 +255,7 @@ export async function start({ processEnv, fetch = globalThis.fetch, clock = { no
     const adapter = createNotionAdapter({ http: notionHttp, configDir: env.configDir, readFile: (p) => fsReadFile(p, 'utf8') });
     loader = createLoader({ env, cache, clock, calendar, googleCalendar, adapter });
     guard = createGuard({ token: env.token, formKey: env.formKey, allowedHosts: env.allowedHosts, identityHeader: env.identityHeader, proxySecret: env.proxySecret, clock });
-    handlers = createHandlers({ loader, gh: null, guard, env, clock, verbsFor: () => adapter });
+    handlers = createHandlers({ loader, gh: null, guard, env, clock, verbsFor: () => adapter, skin: skinForHandlers });
   } else {
     const owners = createOwnerHttp({ defaultToken: env.token, tokens: env.githubTokens, fetch, etags: cache.etags });
     const client = owners.default;
@@ -252,9 +281,9 @@ export async function start({ processEnv, fetch = globalThis.fetch, clock = { no
       deleteProjectItem: (x) => deleteProjectItem(forLogin(x.owner), x),
       setItemNumber: (x) => setItemNumber(forLogin(x.owner), x),
     };
-    handlers = createHandlers({ loader, gh, guard, env, clock });
+    handlers = createHandlers({ loader, gh, guard, env, clock, skin: skinForHandlers });
   }
-  app = createApp({ handlers, guard, log, staticFiles });
+  app = createApp({ handlers, guard, log, staticFiles, skin });
 
   // R65: the daily full read needs no outside scheduler.
   const timer = setInterval(() => {

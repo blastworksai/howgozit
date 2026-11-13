@@ -12,7 +12,7 @@ Run everything from the repository root.
 - Named rules, failing when a named rule has no test: `node scripts/rules.mjs 17 18 S3`
 
 Every test name starts with the ID of the rule it proves and a space (`R17 …`, `S3 …`), or with `U ` for a helper test that proves no rule.
-`test/contract-coverage.test.mjs` fails when a rule R1 to R164 or S1 to S8 has no test, or a test names a rule that is not in this file.
+`test/contract-coverage.test.mjs` fails when a rule R1 to R178 or S1 to S8 has no test, or a test names a rule that is not in this file.
 Each check below is written as "Given … expect …"; the test builds the "given" with `fixtures/build.mjs` unless a fixture file is named.
 
 ## Words
@@ -48,6 +48,7 @@ A check-in of a habit with a `score` also carries a score.
 | Today's calendar events, when read from Google (R118) | Google; a copy in the last good read | the user, in their own calendar; the board only reads |
 | The agent's `state/calendar.json`, shown beside iCloud's events when `calendar.includeFile` is on (R109 to R115) | data repo | an agent only |
 | Last good read | the board's own data directory | the board |
+| The skin folder (optional, R165): one stylesheet, fonts and images | a folder on the board's own machine, named by `BOARD_SKIN_DIR`; never the data repo, never GitHub | the user; the board only reads it, once, at start |
 
 ### Deployment values (environment variables)
 
@@ -71,6 +72,7 @@ A check-in of a habit with a `score` also carries a score.
 | `BOARD_ICLOUD_USER` | the Apple Account sign-in for the calendar (R96, R102) | none; set together with the next one or not at all |
 | `BOARD_ICLOUD_APP_PASSWORD` | an app-specific password for that account, never the account's own password | none |
 | `BOARD_GOOGLE_ICAL_1` to `BOARD_GOOGLE_ICAL_5` | the secret address in iCal format of the first to the fifth calendar listed in the settings, for `source` `google` (R119); a secret, never written to a file inside a repository | none; each optional and independent |
+| `BOARD_SKIN_DIR` | a folder holding the board's skin: `skin.css`, `fonts/`, `img/` (R165 to R174); surrounding spaces are removed | none; unset, empty or only spaces means no skin |
 | `BOARD_PROXY_SECRET` | a secret the login proxy sends on every request as `X-Board-Proxy-Secret`; when set, the board refuses any request without it (R107) | none; at least 32 characters, no whitespace |
 
 ## Shapes
@@ -135,14 +137,14 @@ The order of `projects` is the user's own order.
 ```json
 {
   "colors": {
-    "ground": "#E9ECEF", "dot": "#D3D8DE", "card": "#FFFFFF", "border": "#D5D9DE",
-    "ink": "#111418", "muted": "#5B6470", "faint": "#7A8390",
-    "agentBg": "#111418", "agentInk": "#F1F3F5",
-    "accent": "#D4F25A", "hot": "#FF5B1F", "hotInk": "#B23A0A", "ok": "#2F9E6B"
+    "ground": "#131415", "dot": "#2C2E30", "card": "#1F2123", "border": "#38393C",
+    "ink": "#ECEDED", "muted": "#A9ACAF", "faint": "#93979A",
+    "agentBg": "#2C3A3C", "agentInk": "#EAF2F2",
+    "accent": "#4FD1B5", "hot": "#EF6A52", "hotInk": "#FF9C88", "ok": "#5FCB8A"
   },
   "projectColors": ["#7FE7D3", "#FFC94D", "#C9B6FF", "#FF9E80", "#8FB8FF", "#B7E38A"],
   "fonts": {
-    "source": "google",
+    "source": "system",
     "heading": "Bricolage Grotesque",
     "body": "Geist",
     "mono": "Geist Mono"
@@ -152,7 +154,10 @@ The order of `projects` is the user's own order.
 ```
 
 The values above are the defaults; the whole file is optional, and so is every key in it.
+The default colours are the neutral dark set that einh signed on 13 November 2026 (`workspaces/my-world/blastworks-world/4-howgozit/SIGNED.md`); a theme file written before that date keeps every colour, font and radius it names, and a key it lacks takes the new default.
+The three family names are used only when `fonts.source` is `google` (R84); with `system` the three families are the three stacks of R84.
 Every value is soft: a bad colour (R76), an empty or bad `projectColors`, a bad font name (R84), a `fonts.source` other than `google` or `system`, or a `radius` that is not a whole number from 0 to 40 falls back to its default.
+The file has no key for the text on the accent: that colour is derived from the others and is not a setting (R175).
 
 ### Raw: the board snapshot the reader hands the model
 
@@ -793,6 +798,7 @@ Check: given a first read into an empty folder with token `SENTINEL-TOKEN-123`, 
 
 **R67. When GitHub does not answer, the board shows the last good read and says so.**
 Any failed read (no network, a 5xx, a rate limit, a refused token) serves the last good read with `run.stale` set to the time of that read and the reason in plain words; the page shows them in a banner inside the header section (an element with `data-banner`), with status 200.
+The banner is the alert strip of the part map: `<div class="al ch in banner" data-k="warn" data-banner role="status">` holding `<span class="pad warn"></span>` and `<div class="al-t"><b class="cap banner__title">Showing the last good read.</b><span>`, the reason, `. Data from `, the stamp and `.</span></div>`, all text escaped (R73); it is a `div` and never a `p`.
 With no last good read the answer is a small plain page with status 503 and no board.
 With more than one GitHub owner, a read that fails for one owner (any request that needs that owner's token) leaves that owner's projects out with `project-owner-unreadable` and a notice naming the owner.
 The rest of the board is shown and the read counts as good.
@@ -1032,8 +1038,9 @@ Check: given `fixtures/raw/hostile.json`, `fixtures/settings/hostile.json` and `
 
 **R74. The page links only to GitHub.**
 An `href` is written only for a URL that starts with `https://github.com/`; anything else is shown as text.
-The only other addresses a page may hold are its own stylesheet and script and the font stylesheet of R84.
+The only other addresses a page may hold are its own stylesheet and script, the font stylesheet of R84 and, when a skin is loaded, its own skin stylesheet `/skin/skin.css` (R171).
 Check: given `html_url` values of `javascript:alert(1)`, `http://github.com/x` and `https://github.com.evil.example/x` on three tasks in What's next, expect three seats and no `href` for any of them.
+Check: given a loaded skin, expect `/skin/skin.css` to be the one address in the page beyond GitHub links, the board's own two static files and, with Google fonts, the font stylesheet.
 
 **R148. A Notion board links only to Notion and GitHub.**
 R74 is extended: `https://www.notion.so/` is the one other allowed link start, and only on a Notion board.
@@ -1053,25 +1060,46 @@ A GitHub label colour (six hex digits without `#`) is also a colour source: the 
 Check: given label colours `1d76db` and `zzz` on two modes, expect `#1d76db` used and one fallback with `color-invalid` at 1.
 
 **R77. Every answer carries locked-down headers, and the page carries no inline code.**
-`Content-Security-Policy` is `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<n>' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`, without the two font hosts when fonts are `system`.
-Also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+The policy of the board page and of a notice page (R172) depends on the nonce `<n>` and on two facts: whether the theme's fonts are `google` (a notice page always counts as `system`, because it does not read the theme) and whether a loaded skin has at least one font file (R166).
+`font-src` gains `'self'` only when a loaded skin has at least one font file, and the two Google hosts appear only when the theme's fonts are `google`.
+These are the four policies, written exactly (one line each, `; ` between the parts):
+
+1. Google fonts, no skin font: `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<n>' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
+2. Google fonts, with a skin font: `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<n>' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
+3. System fonts, no skin font: `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<n>'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
+4. System fonts, with a skin font: `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-<n>'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
+
+Every other answer (a static file, the skin stylesheet, a skin raster image or font, the health check, a redirect, a plain message) carries no nonce and no `font-src` and no font host: `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`.
+The one exception is a skin vector image, which has its own policy (R170).
+Also `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` on every answer.
+The policy is `same-origin` and not `no-referrer` because a plain form post (R91) must carry its real `Origin` for the check of R55: with `no-referrer` a browser sends `Origin: null` on such a post, which is refused, so with scripts blocked every form would answer 403; with `same-origin` a post to the board itself carries the board's own origin, and nothing is sent to any other site.
+`Cache-Control` is `no-store` on every answer except a skin font and a skin image (raster or vector), which carry `private, max-age=3600` so that a skinned board does not fetch its fonts on every page load; the skin stylesheet stays `no-store`.
 The page has no `style=` attribute, no `on…=` attribute and no script written into it; values that differ per item (colours, widths, positions) go in one `<style>` block carrying the nonce.
+Every board page and every notice page carries its own nonce, made fresh for that answer: the same value stands in the answer's `Content-Security-Policy` and on its `<style nonce="…">`, and no two answers ever share one.
+Where a rule says two answers are equal (R79, R107, R169), they are equal in status, in headers apart from the date and apart from the nonce value inside the `Content-Security-Policy`, and in body apart from that same nonce value; with every nonce value replaced by one fixed word (`NONCE`) the two answers are byte for byte equal.
 Check: given the page, a static file, the health check and an error page, expect those headers on all four, and in the page zero matches for `style="` and ` on[a-z]+="` and exactly one `<script`, which has a `src` and no content.
+Check: given the four combinations of theme fonts (`google`, `system`) and skin (a skin with a font, a skin with none or no skin), expect the page's policy to equal the matching string above with `<n>` replaced by the page's own nonce, and the same nonce in the page's `<style nonce="…">`; given a notice page, expect string 3 (or string 4 when the skin has a font) with the notice's own nonce.
+Check: given a loaded skin, expect on the skin font and each skin image answer `Cache-Control: private, max-age=3600`, and `no-store` on the skin stylesheet, the page, a static file, the health check, a redirect and a refusal; given no skin, expect `no-store` on every answer.
+Check: given any two notice pages (for instance two 401s, from a wrong proxy secret and from a missing identity), expect the nonce in each answer's policy to equal the nonce on its own `<style>` block, the two nonces to differ, and, with each nonce value replaced by `NONCE`, the two answers to be equal in status, headers apart from the date, and body, byte for byte.
+Check: in the page, with a skin and without one, expect zero `style="`, zero ` on[a-z]+="` and exactly one `<script`; in a notice page, with a skin and without one, expect zero `<script`.
 
 **R78. The board answers only to its own name.**
 A request whose `Host` is not in the allowed list gets status 421 and an empty body, whatever the path, except the health check.
-Check: given `Host: evil.example` on `/`, on a static file and on an action, expect three 421s with empty bodies and no GitHub request.
+Check: given `Host: evil.example` on `/`, on a static file and on an action, expect three 421s with empty bodies and no GitHub request; given a loaded skin, expect the same 421 and empty body on `/skin/skin.css`, on a skin font and on a skin image.
 
 **R79. The board holds no passwords and cannot be started open.**
 It has no login page and reads no credentials from a request.
 In `local` mode it binds to `127.0.0.1`; in `proxy` or `hosted` mode it refuses to start without `BOARD_IDENTITY_HEADER`, and a request without that header gets 401 and no board, except the health check.
 Behind a proxy on a machine that other accounts or programs share, the lock of R107 should be set as well; the proxy guide says how.
-Check: given `proxy` mode with no identity header configured, expect a refusal to start with one plain sentence; given it configured and a request without it, expect 401; given `local` mode, expect a loopback listening address; expect no route containing `login`.
+Check: given `proxy` mode with no identity header configured, expect a refusal to start with one plain sentence; given it configured and a request without it, expect 401; given `local` mode, expect a loopback listening address; expect no route containing `login`; given a loaded skin in `proxy` mode, expect a request without the identity header to `/skin/skin.css`, to a skin font and to a skin image to get the same 401 as the same request to `/static/board.css` (equal as R77 defines it, the nonce value set aside).
 
-**R80. There are nine routes and no others.**
+**R80. There are nine routes, and with a skin three more kinds, and no others.**
 `GET /`, `GET /static/board.css`, `GET /static/board.js`, `GET /healthz`, and `POST /actions/idea`, `/actions/habit`, `/actions/sort`, `/actions/close`, `/actions/score`.
-A known path with another method answers 405; every other path answers 404; a static file is served from a fixed list, never from a path built out of the request.
+Only when a skin is loaded (R165) there are also `GET /skin/skin.css`, `GET /skin/fonts/<name>` for each font the skin loaded and `GET /skin/img/<name>` for each image the skin loaded, for exactly the names loaded at start and no others.
+Without a skin the routes are the nine, and every path that starts with `/skin/` answers 404.
+A known path with another method answers 405; every other path answers 404; a static file or a skin file is served from a fixed list built at start, found by exact match of the path part of the request against that list, never from a path built out of the request.
 Check: given `/static/../server.mjs`, `/static/%2e%2e/x` and `/admin`, expect three 404s with no file content; given `PUT /` and `GET /actions/idea`, expect two 405s.
+Check: given a loaded skin holding `skin.css`, `fonts/a.woff2` and `img/b.png`, expect those three paths to answer 200 and `PUT /skin/skin.css` to answer 405; expect `/skin/../server.mjs`, `/skin/%2e%2e/x`, `/skin/fonts/`, `/skin/fonts/A.woff2`, `/skin/fonts/b.png`, `/skin/img/a.woff2` and `/skin/fonts/missing.woff2` to answer 404 with no file content; given no skin, expect `GET /skin/skin.css` and `GET /skin/fonts/a.woff2` to answer 404 and the route list to be the nine.
 
 **R81. The health check says nothing.**
 `GET /healthz` answers status 200 and `ok`, with or without GitHub, whatever the `Host` and with or without the identity header.
@@ -1079,26 +1107,39 @@ Check: given GitHub down, a foreign `Host` and no identity header, expect 200 an
 
 **R107. A lock between the proxy and the board.**
 With `BOARD_PROXY_SECRET` set, a request must carry the header `X-Board-Proxy-Secret` with exactly that value, or it gets 401 and no board, except the health check.
-The check runs after the `Host` check of R78 and before the identity check of R79, and its 401 has the same status, headers and body as the 401 for a missing identity, so the answer does not say which lock refused.
+The check runs after the `Host` check of R78 and before the identity check of R79, and its 401 has the same status, headers and body as the 401 for a missing identity, apart from the date and the nonce value that each answer carries (R77), so the answer does not say which lock refused: each answer's nonce in its header matches the nonce on its own style block, each nonce is fresh (two answers never share one), and with every nonce value replaced by one fixed word the two answers are byte for byte equal.
 The two values are compared in constant time, and a header sent more than once is a wrong value.
 With the setting unset or empty the board behaves exactly as it does without this rule, in every mode.
 A value that is set and is shorter than 32 characters, or holds any whitespace, makes the board refuse to start with one plain sentence that does not hold the value; a value made only of whitespace is refused, not read as unset.
 The secret is held to R75: it appears nowhere.
-Check: given the secret unset, expect every case below to answer as it does without this rule; given it set, on each of the eight routes of R80, with the header absent, wrong, wrong but of equal length, right but sent twice, and right, each with the identity header absent and present, expect 401 for every case but the right one on every route except `GET /healthz`, which answers 200 and `ok`; expect 421 for a foreign `Host` whatever the header; expect 401 for the right header with no identity and the route's own answer for the right header with an identity; expect the 401 for a wrong secret and the 401 for a missing identity to be equal in status, in headers apart from the date, and in body; given values of 31 characters, of 32 characters holding a space, of 32 characters ending in a newline and of spaces only, expect four refusals to start, none of them holding the value, and given a value of exactly 32 characters expect a start; given the first request after a fresh start with an empty data folder and no header, expect 401, the same as on a board that has already served a page; given the sentinel secret and every route, every action and every forced failure run once, expect the secret, raw, URL-encoded and base64-encoded, in no response body, no response header, no log line, no form token and no file in the data directory.
+Check: given the secret unset, expect every case below to answer as it does without this rule; given it set, on each route of R80 and, with a loaded skin, on `/skin/skin.css`, a skin font and a skin image (driven by the same table as the static routes), with the header absent, wrong, wrong but of equal length, right but sent twice, and right, each with the identity header absent and present, expect 401 for every case but the right one on every route except `GET /healthz`, which answers 200 and `ok`; expect 421 for a foreign `Host` whatever the header; expect 401 for the right header with no identity and the route's own answer for the right header with an identity; expect the 401 for a wrong secret and the 401 for a missing identity to be equal in status, in headers apart from the date and apart from the nonce value inside the `Content-Security-Policy`, and in body apart from that same nonce value, and expect the nonce in each answer's header to match the nonce on its own `<style>` block, the two nonces to differ, and the two answers to be byte for byte equal once each nonce value is replaced by a fixed word; given values of 31 characters, of 32 characters holding a space, of 32 characters ending in a newline and of spaces only, expect four refusals to start, none of them holding the value, and given a value of exactly 32 characters expect a start; given the first request after a fresh start with an empty data folder and no header, expect 401, the same as on a board that has already served a page; given the sentinel secret and every route, every action and every forced failure run once, expect the secret, raw, URL-encoded and base64-encoded, in no response body, no response header, no log line, no form token and no file in the data directory.
 
 ### Theme and layout
 
 **R82. The look comes from one theme file.**
 The theme is turned into CSS variables in the nonce `<style>` block; the stylesheet uses those variables for every colour, font and radius.
 A missing key takes its default; a `radius` that is not a whole number from 0 to 40 takes the default.
+`radius` sets the size of the 45-degree corner cut: the biggest cut of the page is `min(radius, 14)` pixels, written in the stylesheet as `min(var(--radius), 14px)`, and every smaller part takes a smaller cut in proportion and never a bigger one than that.
+A `radius` of 0 gives square corners everywhere.
+Section frames, keys, tags, chips, mailbox pills, the close box and the name highlight follow the cut; calendar events are always square.
+Corners are cut by shape and never drawn by an image; no declaration of `border-radius`, or of any of its longhands (`border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius`, `border-bottom-left-radius` and the logical ones such as `border-start-start-radius`), in `board/static/board.css` has a value other than `0`.
+The variable `--on-accent` is added to the same block by the theme module (R175); the theme file has no key for it.
 Check: given a theme with accent `#123456` and radius `"9px;}"`, expect `--accent:#123456` and the default radius in the page.
+Check: given radius 0, 14 and 40 in three themes, expect `--radius:0px`, `--radius:14px` and `--radius:40px` in the pages, and in the stylesheet the cut written with `min(` of `var(--radius)` and `14px` (so the cut is 0, 14 and 14 pixels), and no `border-radius` or longhand of it with a value other than `0`.
+Check: given no theme file, expect the thirteen default colours of the Theme block above, `--radius:20px`, and the three system stacks of R84 in the three font variables.
 
 **R83. No colour is written anywhere but the theme.**
-Check: in `board/static/board.css` and every file under `board/render/`, expect no `#` followed by 3 to 8 hex digits, no `rgb(`, `rgba(`, `hsl(` or `hsla(`, and every stylesheet declaration of `color`, `background`, `background-color`, `border-color`, `fill`, `stroke` or `outline-color` to use `var(` or one of `none`, `transparent`, `currentColor`, `inherit`.
+The rule covers the product's own files, which are `board/static/board.css` and every file under `board/render/`.
+The files of a skin are not covered: a skin may write any colour, and is bounded by the content policy of R77 instead (R173).
+A numeric character reference is not a colour and is not counted: before the check the text of each file has every match of the pattern `&#(?:[0-9]+|[xX][0-9a-fA-F]+);` removed (so the `&#8288;` of R177 is allowed).
+Check: in `board/static/board.css` and every file under `board/render/`, after removing every match of `&#(?:[0-9]+|[xX][0-9a-fA-F]+);` from the text, expect no match of `#[0-9a-fA-F]{3,8}` (a `#` followed by 3 to 8 hex digits), no `rgb(`, `rgba(`, `hsl(` or `hsla(`, and every stylesheet declaration of `color`, `background`, `background-color`, `border-color`, `fill`, `stroke` or `outline-color` to use `var(` or one of `none`, `transparent`, `currentColor`, `inherit`.
 
-**R84. Fonts come from Google unless the theme says otherwise.**
-With `fonts.source` `google` the page links one stylesheet at `https://fonts.googleapis.com/css2` for the three families, whose names may hold only letters, digits and spaces; with `system` the page makes no outside request at all and the families are the device's own.
-Check: given `system`, expect no `https://` in the page other than GitHub links and no font host in the headers; given a family named `X&family=Evil`, expect the default family and `font-invalid` at 1.
+**R84. Fonts are the device's own unless the theme says `google`.**
+The default `fonts.source` is `system`.
+With `system` the page makes no outside request at all and the three font variables are these stacks, written exactly: `--font-heading` and `--font-body` are `system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`, and `--font-mono` is `ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace`.
+With `fonts.source` `google` the page links one stylesheet at `https://fonts.googleapis.com/css2` for the three families, whose names may hold only letters, digits and spaces, and each variable is the family's name in double quotes, a comma and that role's system stack above.
+A skin may bring its own fonts (R166), served by the board itself, and needs no theme font setting for them.
+Check: given no theme file and given `system`, expect no `https://` in the page other than GitHub links and no font host in the headers, and the three variables to equal the stacks above; given `google`, expect one link to `https://fonts.googleapis.com/css2`, both font hosts in the policy (R77) and each variable to start with the family's name in double quotes; given a family named `X&family=Evil`, expect the default family and `font-invalid` at 1.
 
 **R85. A broken theme never takes the board down.**
 A theme file that is not valid JSON gives the default theme and a `theme-unreadable` warning.
@@ -1117,7 +1158,9 @@ Sections appear in this order:
 8. `ideas` (always), `standalone` (left out when the count is 0);
 9. `footer`: warnings in plain words, the time of the data, a link to the data repo.
 
-Every section's outer element carries `data-section` with its name above.
+Every section's outer element carries `data-section` with its name above, whatever the look and whatever skin is loaded (R173).
+The outer element of each of the twelve sections `brief`, `season`, `focus`, `timeline`, `calendar`, `inbox`, `next`, `heatmap`, `projects`, `log`, `ideas` and `standalone` is the frame: its class list starts with `card` and its only child is one `<div class="card-f">` that holds the section's head and body; `header`, `capture`, `habits` (a wrapper whose tiles are each a `card` with one `card-f`, class `habit`) and `footer` are not frames.
+The part class names (`card`, `card-f`, `lab`, `cap`, `tag`, `b`, `pad`, `bdg`, `al`, `ls`, `sel` and the others) are listed in `references/skins.md` (R173), and that list and the page agree.
 Check: given `fixtures/board/page.board.json`, expect those sixteen names in that order; given `fixtures/board/page-min.board.json` (no panels, no season, no habits, no milestones, nothing standalone), expect `header`, `capture`, `focus`, `next`, `heatmap`, `projects`, `ideas`, `footer` in order and no other.
 
 The browser tab's title is the person's name from settings followed by ` · Howgozit`; with no name in settings it is `Howgozit` alone.
@@ -1128,7 +1171,7 @@ Check: given the name `Sam`, expect exactly one `<title>` element and it reads `
 
 **R87. On a phone it is one column.**
 At a width of 480 pixels or less every section takes the full width, in the order of R86, with habits two to a row and the "Log an idea" box staying at the bottom of the screen.
-Check: expect one `@media (max-width: 480px)` block in the stylesheet that sets the page grid to one column and gives the capture section `position: sticky` and `bottom: 0`; looking at it at 390 pixels is a line of `references/release-checklist.md`.
+Check: expect exactly one `@media (max-width: 480px)` block in the file `board/static/board.css` (the `@media` rules that the page's nonce block holds, R177, are not counted and are not that block); expect that one block to set `grid-template-columns` to a single track (`1fr` or `minmax(0, 1fr)`) on each of the selectors `.row-brief`, `.row-trio`, `.row-low` and `.row-ideas` (the row classes of the page grid; `.row-focus` is one column already), to set `grid-template-columns` on `.habit-grid` to exactly two tracks, and to give `.capture` `position: sticky` and `bottom: 0`; a rule outside that block, or on any other selector, does not satisfy the check; looking at it at 390 pixels is a line of `references/release-checklist.md`.
 
 **R88. Every card says where its data comes from.**
 Each card carries a small source tag in an element with the attribute `data-src`: `GH`, `CAL`, `MAIL`, or the agent's name from settings.
@@ -1147,9 +1190,11 @@ Check: given a project `house` with colour `#123456`, a milestone, a seat and a 
 
 **R91. The page works with no JavaScript.**
 Every control is a plain HTML form that posts to one of the five action paths of R80.
+A form's submit button may hold helper-owned inner elements around its escaped label (the parts that draw the key); the form's `method`, `action`, hidden fields, token and its single submit are exactly as before, and the label's text is still escaped like every other string (R73).
 Accepting a suggestion posts to `/actions/sort` with the idea's number and `accept=1`; the board takes the project and milestone from the suggestion, not from the form.
 Check: expect every `<form` in the page to have `method="post"` and one of the five action paths, and at least one form for each of the four paths in `fixtures/board/page.board.json`.
 Check: given a board with a scored habit, expect its form to post to `/actions/score` and every form on the page to post to one of the five paths.
+Check: given a plain form post carrying `Origin` equal to the board's own origin, expect it accepted; given `Origin: null`, expect it refused with 403 as before; and expect `Referrer-Policy: same-origin` on every answer (R77).
 
 ### Soft values, dates, greeting and the script
 
@@ -1413,6 +1458,194 @@ With `source` `icloud` or with no `calendar` block, no request of any kind goes 
 For the same inputs the board, the page, the requests the board makes, the warnings and the files it writes are equal, byte for byte, to those of the same board started without any of those variables.
 A settings file that does not use this source is read as it was before R118 to R127, except that the sentence of R119 about `calendar.google.com/calendar/ical/` applies to every settings file.
 Check: given a fixture with `source` `icloud` and a working invented iCloud, and in a second run with no `calendar` block, each started three times with no `BOARD_GOOGLE_ICAL_<n>`, with all five set to valid stand-in addresses and with all five set to `not an address`, expect the board and page equal in the three runs, the requests recorded equal, zero requests to a Google address and a stand-in Google that records nothing; expect no `data-source` and no `names` anywhere.
+
+### Skin folder
+
+A skin is one private folder on the board's own machine that gives the board a look of its own: one stylesheet, up to six fonts and up to twelve images.
+The board reads it once at start, keeps it in memory and serves it from a fixed list.
+R166 to R172 apply only when `BOARD_SKIN_DIR` names a folder (R165); R173 and R174 always apply; the guide for people who write skins is `references/skins.md`.
+
+**R165. A skin is one folder named by one setting, and without it nothing changes.**
+`BOARD_SKIN_DIR` names a folder on the board's own machine; the setting is trimmed of surrounding spaces when it is read (and again by the loader, which takes it as given), and a relative path is read from the folder the board was started in.
+A blank value (empty, or only spaces, which trims to empty) is unset, and unset means no skin.
+With no skin loaded (the setting absent, or the folder unusable by R168) the board has no skin link and no `data-skin` mark in any page (R171, R172), no `font-src 'self'` and no `max-age=3600` in any answer (R77), the nine routes of R80 and a 404 for every `/skin/` path.
+With the setting absent the page, the headers and the routes are byte for byte those of a board without the skin feature, apart from the nonce and the form tokens, which differ on every answer; with the setting present but the folder unusable the only difference from that board is the `skin-unreadable` line in the footer (R168).
+The folder is read once, at start, into memory (R166, R167); a file added, changed or removed afterwards changes nothing until the board is started again, and the board neither watches nor reads the folder again.
+The folder's path appears in no page, no response header and no warning text.
+Check: given the setting unset, empty (`""`) and only spaces, expect all three boards equal to the recorded capture of the page, the headers and the route list taken before the skin code was added (nonce and form tokens set aside), and `GET /skin/skin.css` answering 404; given the setting naming a folder that does not exist, expect the same page plus exactly one `skin-unreadable` line in its footer.
+Check: given a good skin loaded and then `skin.css` rewritten on disk, expect the served bytes unchanged until the board is started again, and the new bytes after it; given the folder's path as a sentinel, expect it in no page, no header and no warning text.
+
+**R166. The folder has one shape, and every limit is exact.**
+The folder holds `skin.css` (required), a folder `fonts/` and a folder `img/` (each optional); in the sizes below a kilobyte is 1,024 bytes and a megabyte is 1,048,576 bytes.
+
+| Part | Allowed | Size limit of each file |
+| --- | --- | --- |
+| `skin.css` | exactly this name, one file | 256 KB |
+| `fonts/` | up to 6 files, extension `.woff2` | 300 KB |
+| `img/` | up to 12 files, extension `.png`, `.svg`, `.webp` or `.jpg` | 500 KB |
+
+Every file name in `fonts/` and `img/` matches `^[a-z0-9][a-z0-9-]{0,39}\.[a-z0-9]+$` (lower case, digits and hyphens, at most 40 characters before the one dot) and has the extension its folder allows.
+All files that are served together are at most 3 MB (3,145,728 bytes): `skin.css` is counted first, then the fonts in ascending order of name, then the images in ascending order of name, and a file that would take the total over 3 MB is skipped and counted, and a later, smaller file that still fits is served.
+Names are put in ascending order by comparing their UTF-16 code units, and the first 6 fonts and the first 12 images that meet every rule are served; a seventh font or a thirteenth image is skipped and counted, and a file that is skipped for any reason does not use up one of the places.
+At most 64 entries are looked at in each of the three folders (the skin folder, `fonts/`, `img/`): the first 64 the system lists, which are then taken in the order above; when a folder holds more, the entries not looked at are not read and the cut adds one to `skin-file-skipped` for that folder.
+The count of a folder of files in `fonts/` or `img/` is therefore: one for the cut when the folder holds more than 64 entries, plus one for each of the (at most 64) looked-at entries that is not served; 65 files in `img/` give 12 served and 53 skipped (one for the cut and 52 over the limit of 12), 64 files give 12 served and 52 skipped, and 65 files in `fonts/` give 6 served and 59 skipped.
+Names that start with a dot count toward the 64 entries looked at in each folder but are ignored without a warning.
+The skin folder's own cut adds one to `skin-file-skipped` only when a skin is loaded.
+`skin.css` must be among the 64 entries the system lists first in the skin folder, and so must `fonts` and `img` to be read at all; a folder whose first 64 entries do not include `skin.css` is unusable (R168), and one whose first 64 do not include `fonts` or `img` is read without it, adding nothing.
+In the skin folder anything other than `skin.css`, `fonts` and `img` is ignored without a warning; in any of the three folders a name that starts with a dot is ignored without a warning.
+Any other entry of `fonts/` or `img/` that is not served (a bad name, a wrong extension, a size over its limit, a count over its limit, a file of another kind, R167) is skipped and adds one to `skin-file-skipped` (R168).
+A skin has fonts when at least one font file is served (R77).
+A file of zero bytes is read like any other, and a `skin.css` of zero bytes is a valid skin.
+Check: given a folder of a good `skin.css`, two fonts and two images, expect all five served and no warning; given in a temporary folder `skin.css` of exactly 262,144 bytes (served) and of 262,145 (no skin, R168), a font of 307,200 and of 307,201 bytes, an image of 512,000 and of 512,001 bytes, expect the exact ones served and the others skipped with a warning each.
+Check: given seven fonts, expect the six first by name served and one skipped; given thirteen images, expect twelve served and one skipped; given names `Font.woff2`, `a b.woff2`, `a..woff2`, `a.WOFF2`, `-a.woff2`, `a.ttf` and a 41-character name before the dot in `fonts/`, and `a.gif` in `img/`, expect all eight skipped and eight added to `skin-file-skipped`; given a name of exactly 40 characters before the dot, expect it served.
+Check: given files whose sizes together would pass 3,145,728 bytes, expect the file that crosses the total skipped and counted, every earlier file in the order above served, and a later file small enough to still fit served; given 65 files in `img/`, expect 12 served and `skin-file-skipped` at 53 (one for the cut, 52 over the limit of 12); given 64 files, expect 12 served and 52; given 65 files in `fonts/`, expect 6 served and 59; given `skin.css` as the 65th entry the system lists in the skin folder, expect no skin and `skin-unreadable` at 1; given dot names among the first 64, expect them counted toward the 64 and no warning for them; given `README.txt`, `.DS_Store` and a folder `docs/` in the skin folder, expect them ignored with no warning.
+
+**R167. A skin is read safely, and a bad file can never stop the start.**
+Only a regular file is read.
+The skin folder, `fonts/` and `img/` must each be a real folder: a link to a folder is not one.
+Each file is opened without following a symbolic link (and without waiting, so a named pipe cannot hold the start), the open handle is checked (it must be a regular file with a size within its limit), and at most the limit plus one byte is read from the handle; where the platform has a no-follow open flag, no decision is made from anything looked at before the open.
+Where the platform has no no-follow open flag, the file is inspected before it is opened and can be rejected then, and that earlier identity (device and inode) is compared with the opened file's.
+A file is skipped when the open is refused, when the handle is not a regular file, when its size is over the limit, when more than the limit can be read from it, or when the number of bytes read differs from the handle's size, which covers a file that grows or shrinks while it is read.
+What is checked of a file is exactly this: it is a regular file and not a link, its size on the open handle is within its limit, the bytes read equal the handle's size, and, on the re-check route, the folder's identity, the file's device and its resolved path (below).
+The listing collects names and not identities, so a file replaced inside the skin folder by another ordinary file of valid size before it is opened is served as the file of that name; it lies inside the skin folder, so nothing outside is exposed.
+Which way of reading is used is decided by the platform alone, as a constant fixed when the reader is written and never by a test that can fail while the board runs: on Linux the reader always uses the handle route below, and on every other platform it always uses the re-check route below.
+The handle route (Linux): each of the three folders (the skin folder, `fonts/`, `img/`) is opened once, as a folder, without following a link (the directory and no-follow flags), and is held open while its files are listed and read; a file is reached through that open folder and never through a path that is resolved again from the top, because the no-follow flag guards only the last part of a path and a folder swapped for a link after it was checked would otherwise be followed.
+Each file is opened through the held folder's handle, as `/proc/self/fd/<n>/<name>` (`<n>` the folder's descriptor, `<name>` a listed name that passed the pattern of R166), with the no-follow and non-blocking flags, so a later swap of the folder's name changes nothing; the folder's handle is checked against what was seen of the folder (its device and inode).
+On Linux nothing is ever opened through a path resolved from the top: if a folder cannot be opened and held, if its handle does not match what was seen, if `/proc/self/fd` cannot be used (not mounted, no descriptor free, access refused; the held folder's contents then cannot be reached through its handle, although the folder itself can be open), or if anything else on this route fails, the outcome is a refusal by the rules of R166 to R168 and never a read by another way: for the skin folder, no skin and `skin-unreadable` at 1; for `fonts/` or `img/`, that folder skipped and counted once; for a file, that file skipped and counted.
+So a Linux system where `/proc` is not usable gets no skin.
+The re-check route (every other platform) holds no folder open: each of the three folders is checked as a real folder, not a link (above), and its device and inode are taken; it is listed by its path, and its device and inode are compared again after the listing; each file is then opened by its path under the folder, with the no-follow and non-blocking flags where the platform has them, and after each open the file is skipped unless the folder's path still names the same folder (same device and inode, not a link), the opened file is on the folder's device, and the file's resolved path lies inside the resolved skin folder; where the system offers no way to open without following links, the file's identity (device and inode) is also compared before and after the open.
+On those platforms this narrows the window in which a swap can succeed and does not close it, and it is untested on Windows and macOS; the protection of the held folder is claimed for Linux only, and only as the handle route above states it.
+On both routes, besides the configured skin folder itself and what lies under it, the reader makes no additional open of the filesystem root, of an ancestor of the skin folder, or of an unrelated path (no probe).
+On the handle route (Linux) no file or folder outside the skin folder is ever opened.
+On the re-check route a folder swapped for a link after it was listed can cause a file outside the skin folder to be opened for the instant before the check after the open rejects it, and, as disclosed above, that file can be read if the folder is put back before the check runs.
+A link, a named pipe, a device, a folder where a file is expected and a growing file are each skipped, never followed, never read through and never able to hang or fail the start; the content a link points at never reaches any answer.
+A `fonts/` or `img/` that exists but is a link, is not a folder or cannot be listed is not read at all and adds one to `skin-file-skipped`; one that is absent adds nothing.
+A thrown error while reading one file skips that file only.
+Check: given in a temporary folder a symbolic link named `x.png` to a file holding a sentinel, a named pipe `y.png`, a folder `z.png`, a file of limit plus one byte and a good `w.png`, expect only `w.png` served, four added to `skin-file-skipped`, the sentinel in no answer, and the load finishing within one second.
+Check: given `fonts/` replaced by a symbolic link to a folder holding a good font, expect that font not served and `skin-file-skipped` at 1 while the skin still loads; given `skin.css` as a symbolic link to a good file, expect no skin and `skin-unreadable`; given the skin folder itself as a link to a good folder, expect no skin and `skin-unreadable`.
+Check: given a file whose reported size on the open handle is within its limit but which yields the limit plus one byte when read, expect it skipped and the load not hung; given a file that yields fewer bytes than the size its handle reported, and one that yields more, expect each skipped; given an honest file with the same stand-ins in place, expect it served.
+Check: given the source of the reader, expect these properties: each file is opened with the no-follow flag and the non-blocking flag where the platform has them (and, where it has no no-follow flag, the device and inode compared before and after the open); the route is chosen by a constant of the platform (Linux or not) and by nothing that is tried and can fail at run time; `fstat` is taken on the open handle and requires a regular file within its limit; at most the limit plus one byte is read from the handle and the bytes read are compared with the handle's size; no file is read whole by its path (no `readFileSync`, `readFile` or `createReadStream` on a skin file); the handle is closed after reading; the three folders are checked as real folders with `lstat`.
+Check: given `img/` replaced, after it was listed, by a symbolic link to an outside folder holding a regular file with a sentinel (the swap made at the moment of the first open of a child, by a stand-in for that open), expect the sentinel in no served body, each affected name either served with the genuine folder's own bytes (a reader that holds the folder open never sees the link) or skipped, and the load not hung; given the same for `fonts/`, expect the same; given the skin folder itself swapped for a link to an outside folder holding a stylesheet with a sentinel at the first open of `skin.css`, expect either the genuine stylesheet served or no skin with `skin-unreadable` at 1, never the outside stylesheet and the sentinel in no served body, and the load not hung.
+Check: given the source of the reader, expect these properties: on Linux each of the three folders is opened with the directory flag and the no-follow flag and held open while its files are read, and each child is opened through the folder's handle (a `/proc/self/fd/` path) with the no-follow and non-blocking flags, and no code path on Linux falls back to opening a child by a path built from the folder's name; no child is opened by a path built from the folder's name alone.
+Check: given, on Linux, every open of a `/proc/self/fd/` path failing (no descriptor free, then access refused), expect no skin, `skin-unreadable` at 1, and no child opened by a plain path (a recording stand-in sees none).
+Check: given the filesystem root unreadable, expect the fixture skin loaded as usual and, on both routes, no open of the root, of an ancestor of the skin folder or of an unrelated path beyond the skin folder itself and what lies under it (every open the reader makes names either the configured skin folder itself, a path under it (the re-check route), or, on the handle route, a `/proc/self/fd/<n>` entry of a folder handle the reader holds or a path through such an entry (`/proc/self/fd/<n>/skin.css`, `/fonts`, `/img`, or a listed file), and nothing else).
+Check: given the platform reported as another system than Linux, expect the fixture skin loaded through the re-check route, with the folder identity compared after the listing and again after each file is opened, and no folder held open.
+
+**R168. A bad skin is skipped with a plain warning, and the board always starts.**
+Each skipped file (R166, R167) adds one to the warning `skin-file-skipped`, which is shown in the footer in the sentence `1 skin file could not be used and was skipped.` for one and `<n> skin files could not be used and were skipped.` for more (`<n>` is the count).
+A skin folder that cannot be used at all adds the warning `skin-unreadable`, shown in the footer as the sentence `The skin folder could not be read, so the board is shown without a skin.`, and no skin is loaded.
+The folder cannot be used when it does not exist, is not a real folder (R167), cannot be listed, or has no `skin.css` that is a regular file, readable, at most 256 KB and among the first 64 entries listed (R166); with no skin the files of the other folders are not served.
+An unusable skin reports `skin-unreadable` at 1 and nothing else: the counts of files skipped before the folder was found unusable are not reported, and `warnings` holds that one entry only.
+Both warnings are part of `run.warnings` (the board's own warnings, Raw above) on every board page, with their count fixed at start; a notice page has no footer.
+A skin never stops the board from starting, and nothing in a skin changes any answer other than the ones named in these rules.
+Check: given three skipped files, expect `skin-file-skipped` at 3 and, in the footer, `3 skin files could not be used and were skipped.`; given one, expect `1 skin file could not be used and was skipped.`; given each of a missing folder, a `skin.css` missing, a `skin.css` of 262,145 bytes, a `skin.css` that is a folder and an unreadable folder, expect no skin, `skin-unreadable` at 1 and the sentence above, no `skin-file-skipped` even when other bad files lie in the folder, and a board that starts and answers its nine routes.
+Check: given the status-by-operation grid (file kind: stylesheet, font, image, other; state: good, too large, bad name, symbolic link, named pipe, folder, growing while read, swapped after the check, unreadable, wrong extension, over the count), expect each cell's outcome to be one of served, skipped with a warning, or no skin, as R166 to R168 state, and in every cell a board that starts.
+Check: given a board started with an empty skin folder, with a folder that is unreadable and with a good folder, and in each the first request after the start with `BOARD_PROXY_SECRET` set and no header on a skin route, expect 401 (or 404 where no skin is loaded), the same as on a board that has already served a page.
+
+**R169. A skin's files are served from the list built at start, behind the same guards as the static files.**
+The list holds `/skin/skin.css`, `/skin/fonts/<name>` and `/skin/img/<name>` for each file served (R166), and each answer is the file's bytes exactly as read at start.
+The content types are `text/css; charset=utf-8` for `skin.css`, and by extension `font/woff2`, `image/png`, `image/svg+xml`, `image/webp` and `image/jpeg` for `.woff2`, `.png`, `.svg`, `.webp` and `.jpg`.
+A skin route sits behind the `Host` check (R78), the proxy lock (R107) and the identity check (R79), in that order and with those answers, exactly as `/static/board.css` does, and its headers are those of R77.
+Check: given a loaded skin with `skin.css`, a font, a raster image and a vector image, expect each path to answer 200 with the file's exact bytes and the content type above, and the headers of R77 for it (R170 for the vector image).
+Check: given the guard table of the static routes (foreign `Host`, wrong proxy secret, missing identity, each alone and together, in `local` and `proxy` modes), run it unchanged against `/skin/skin.css`, a skin font and a skin image, and expect for every row the same status, the same headers (apart from the date and the content type) and the same body, as R77 defines equal answers (the nonce value set aside), as for `/static/board.css`, and expect the 401 of a wrong secret and the 401 of a missing identity on a skin route to be equal.
+
+**R170. A skin's vector image can never run a script.**
+An answer for a file with the extension `.svg` carries `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; sandbox`, which allows the file's own inline styling and nothing else: no script runs, no form can be sent to any address, and the document is sandboxed when it is opened directly (used as an image, none of it runs anyway), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` (as on every answer, R77) and `Cache-Control: private, max-age=3600`; no other policy of R77 applies to it.
+The file is served unchanged, so a vector image that holds a script or an outside address still shows without either running or loading.
+Check: given a skin image `logo.svg` and a hostile twin `evil.svg` that holds a `<script>`, an outside `href` and an XHTML form inside a `foreignObject` that posts to another site, expect on both answers exactly the four headers above, with `Content-Security-Policy` equal to `default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; sandbox`, and the bytes of each file unchanged; given a raster image, expect the plain policy of R77 and not this one.
+Check: the proof in a real browser (the vector image embedded as an image, opened directly, and the hostile twin opened directly with its script, its outside reference and its form doing nothing) is a line of `references/release-checklist.md`.
+
+**R171. With a skin the page links it, in one fixed place, and marks its root.**
+With a skin loaded the head of a board page holds, in this order: `<meta charset>`, the viewport meta, `<title>`, `<link rel="stylesheet" href="/static/board.css">`, the font stylesheet link when the theme's fonts are `google` (R84), `<link rel="stylesheet" href="/skin/skin.css">`, then the nonce `<style>` block, which stays the first and only `<style>` element of the page.
+The root element is `<html lang="en" data-skin>`.
+Without a skin the skin link and the `data-skin` attribute appear nowhere, and the page is as R165 says.
+A skin rule that begins with `html[data-skin]` has a higher specificity than the theme's `:root` variables, so it overrides them whichever comes first in the page.
+Check: given a loaded skin, expect the elements above in that order, `<html lang="en" data-skin>`, exactly one `<style` in the page and that one carrying the nonce; given Google fonts, expect the font link before the skin link; given no skin, expect no `skin.css` and no `data-skin` in the page.
+
+**R172. A notice page wears the skin too, and runs no script.**
+A notice page (the page for a refusal or a failure, R86) has this head: `<meta charset>`, the viewport meta, `<title>` (the notice's heading only, R86), `<link rel="stylesheet" href="/static/board.css">`, `<link rel="stylesheet" href="/skin/skin.css">` when a skin is loaded, then one `<style nonce="<n>">` holding the default theme's variables, the thirteen colours, the three font stacks, `--radius` and `--on-accent`, and nothing else.
+It uses the default theme because it never reads the theme file, so it shows even when that file is unreadable.
+Its root element is `<html lang="en">`, with `data-skin` added when a skin is loaded.
+It carries no `<script` of any kind, and its headers are the policy of R77 for system fonts with the notice's own nonce, with `font-src 'self'` when the skin has a font.
+Check: given a notice with and without a skin, expect the head above, one `<style` carrying the nonce that the notice's own `Content-Security-Policy` names, the variables of the default theme in it, and zero `<script`; given an unreadable theme file, expect the same notice; given a skin with a font, expect `font-src 'self'` in the notice's policy.
+
+**R173. What a skin may rely on, and what binds it.**
+These names are the stable surface of the page, kept by every rebuild of the markup and listed in `references/skins.md`: the section names of R86 on `data-section`; the data hooks `data-src`, `data-focus`, `data-stale`, `data-banner`, `data-message`, `data-waiting`, `data-done`, `data-allday`, `data-account`, `data-colour`, `data-source` and `data-filedate`; the theme variables `--ground`, `--dot`, `--card`, `--border`, `--ink`, `--muted`, `--faint`, `--agent-bg`, `--agent-ink`, `--accent`, `--hot`, `--hot-ink`, `--ok`, `--on-accent`, `--radius`, `--font-heading`, `--font-body` and `--font-mono`; the per-item classes `pc-<key>` (with its `--pc`), `mode-<n>` (with its `--mc`), `x-<n>` and `w-<n>`; and the part class names the guide lists.
+A skin is bound by the content policy of R77 and by nothing else: no style parser is written, a skin may write any colour (R83), and a board that must make no outside request sets its theme fonts to `system` (R84).
+Check: given the guide, expect every variable it lists to be defined in the nonce style block of a page, every hook and part class it lists to appear in a page the board renders from a valid board that exercises it (the fixture boards, extended with the data those names need: an all-day entry, events with a source, a file date, an inbox thread with an account and a colour, a project with waiting items) or in `board/static/board.css`, a name found in no rendered page and not in the stylesheet to fail, and every hook of the list above to appear in the guide.
+
+**R174. The shipped tree holds no font or image but the neutral test skin.**
+The shipped tree is every file under `src/` that git does not ignore (`out/` and `node_modules/` are never shipped).
+A file is binary or an image when its first 8,000 bytes hold a zero byte, or its extension is one of `.woff`, `.woff2`, `.ttf`, `.otf`, `.eot`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.ico`, `.bmp`, `.svg`, `.pdf`, `.zip` or `.gz`.
+The only such files in the shipped tree are `fixtures/skin/fonts/neutral.woff2`, `fixtures/skin/img/neutral.png` and `fixtures/skin/img/neutral.svg`, listed by exact path; the neutral test skin also holds the text file `fixtures/skin/skin.css`.
+No file with a font or image extension exists under `board/`.
+The test skin is made for the test and carries no brand.
+Check: walk the shipped tree and expect every binary or image file to be one of the three paths above, none of them under `board/`, and all four files of the test skin to exist; given the test skin as the skin folder, expect a start with no warning.
+
+### Look
+
+**R175. The text on the accent is derived, not set.**
+The theme module adds one variable, `--on-accent`, to the nonce block (R82): of the theme's own `ground` colour and `ink` colour, the one that has the higher contrast against `accent`.
+Contrast is the WCAG ratio `(L1 + 0.05) / (L2 + 0.05)`, `L1` the larger of the two relative luminances; relative luminance is `0.2126 R + 0.7152 G + 0.0722 B`, each channel `c` (0 to 1) first made linear as `c / 12.92` when `c` is at most 0.03928 and `((c + 0.055) / 1.055) ^ 2.4` otherwise, and a `#RGB` colour is read as `#RRGGBB`.
+On a tie the ink wins: when the two contrasts are equal the `ink` colour is taken.
+The value written is the chosen colour exactly as the resolved theme holds it, and it follows the resolved colours, so a bad colour that fell back (R76) counts as its default.
+The theme file has no key for it, and a key of that name in a theme file is ignored.
+Check: given the default theme (accent `#4FD1B5`, ground `#131415`, ink `#ECEDED`), expect `--on-accent:#131415`; given accent `#1D3557` (very dark) in that theme, expect `--on-accent:#ECEDED`; given accent `#F2B632` (light), expect `--on-accent:#131415`; given a theme with `ground` and `ink` swapped in value, expect the result to follow the values and not the key names; given a theme file holding `"onAccent": "#FF0000"`, expect it ignored.
+
+**R176. Timeline labels are placed so that none covers another label, a dot or the Today line.**
+The renderer places the labels of each lane (a project's lane and the Other lane); the stylesheet places nothing.
+A milestone is drawn when its date is inside the window (R20); its dot sits at its position, the number in its `x-<n>` class (a percent of the plot, one decimal).
+The label is the milestone's short title, a space, its progress as a whole percent and `%`.
+All distances are in pixels on a plot 772 pixels wide, converted to percent as `pixels / 772 × 100`, so the guarantee holds on any wider plot.
+Two boxes clash when each starts before the other ends plus 3 pixels.
+A dot's box is 7 pixels each side of its position; a label's width is `min(150, 8 × its length + 8)` pixels, its length counted in characters; the label of a dot at position `p` sits on its right in the box from `p` + 22 pixels to `p` + 22 + the width, or on its left from `p` - 22 - the width to `p` - 22 pixels, and a label box must lie inside 0 to 100 percent.
+The Today line has a box 5 pixels each side of its position, and a label may not overlap it at all (a margin of 0); a dot may sit on it, and covers it only at that point.
+A lane has four bands, numbered 0 to 3, which are horizontal strips of the lane; each holds the dots and label boxes placed in it.
+The milestones of a lane are taken in ascending order of position, then of date, then of label text (UTF-16 code units).
+For each milestone, in that order:
+1. A band whose placed dots or labels clash with the milestone's dot box is passed over.
+2. In each open band, the right label box then the left label box is a candidate when it clashes with no dot or label placed in that band and does not overlap the Today box.
+3. The candidates are taken in band order, right before left; the first whose label box clashes with the dot box of no milestone later in the order wins, and when every candidate clashes with some later dot, the first candidate wins.
+4. With no candidate the milestone gets no label (a bare dot): its dot goes in the first of bands 0, 1 and 2 where its box clashes with nothing already placed, otherwise in band 3.
+Only a bare dot in band 3 can overlap anything already placed there; no label box ever overlaps another label box, the Today box, or a dot placed before it.
+Milestones on the same date have dots at one position, so they land in different bands.
+The page writes the result in classes: a dot in band `n` above 0 carries `tl-dot--b<n>`, one whose label is on the left carries `tl-dot--left`, and a bare dot carries `tl-dot--bare` and has no label element; a labelled dot holds its text in one element of the class `tl-dot__label`; the lane's plot carries `tl-bands-<k>` when the lane uses more than one band, `k` being its highest band plus 1.
+Every dot, labelled or bare, carries a `title` and an `aria-label` that hold its short title and its date, so a milestone that could not be labelled still has its text; a dot with a link is an `a` and one without is a `span` with `role="img"`.
+The geometry is stated once, here, and the renderer and the stylesheet both use it: a dot is 14 pixels wide, so its box is 7 pixels each side of its centre (its position); the nearest edge of its label is 22 pixels from the dot's centre, to the right or to the left, which leaves a gap of 15 pixels between the dot's edge and the label.
+The stylesheet places the label at exactly that offset from the dot's centre, written `left: calc(50% + 22px)` for a label on the right and `right: calc(50% + 22px)` (with `left: auto`) for a label on the left, and gives the dot the width `14px` and the label a `max-width` of `150px`; `50%` is the centre of the dot, whatever its border.
+Below 962 pixels of timeline width the stylesheet hides every label and shows the dots only, in a container query written `@container (max-width: 961px)`.
+Check: given a lane of four milestones within 5 percent of each other, two of them on one date, and a Today line 20 percent away, expect every milestone to have a dot, each either with a label element or `tl-dot--bare` with its text in `title` and `aria-label`, and, from the classes, positions and label texts, no two label boxes clashing in one band, no label box overlapping a dot box of its band placed before it, and no two dots at one position in one band.
+Check: given one milestone at 50 percent with room, expect band 0 and the label on the right (no `tl-dot--b`, no `tl-dot--left`); given one at 98 percent, expect the label on the left; given the Today line at 52 percent and a milestone at 49 percent, expect the label on the left; given two milestones on one date, expect the second in band 1 (`tl-dot--b1`) with its label on the right; given five on one date, expect the first four in bands 0 to 3 with labels, and the fifth `tl-dot--bare` in band 3 with no label element and its text in `title` and `aria-label`.
+Check: given the stylesheet, expect one rule `@container (max-width: 961px)` that hides `.tl-dot__label`.
+Check: in `board/static/board.css`, expect `.tl-dot` to have `width: 14px`, `.tl-dot__label` to have `left: calc(50% + 22px)` and `max-width: 150px`, and `.tl-dot--left .tl-dot__label` to have `right: calc(50% + 22px)` and `left: auto`; expect the offset converted to the dot's centre (22 pixels) to equal the renderer's constant for the label's start, the dot's half width (7) to equal the renderer's dot box, and 150 to equal the renderer's largest label width.
+
+**R177. Brief lines are written as they are and shown in capitals by the stylesheet; a long name is one highlight per word.**
+The brief section writes each line's text exactly as the agent wrote it and never changes its letter case in the page; the stylesheet shows it in capitals with `text-transform: uppercase` on the class `brief__text`.
+In the header the greeting's name sits in an element of the class `hl`.
+A name of more than 14 characters (as JavaScript counts a string's length) that holds a space is split at the spaces, empty words dropped, into one `hl` element per word, the elements joined by single spaces; any other name is one `hl` element.
+The full stop that ends the greeting follows the last `hl` element after the character U+2060 (word joiner, written `&#8288;`), so that the stop can never begin a line.
+Every word is escaped like every other string (R73).
+Let `lw` be the length of the longest `hl` word as written (for an unsplit name, the whole name); it is found without a limit on the number of words, so that a very long name can never make the page fail.
+When `lw` is more than 13 the title `h1` carries the class `fit-<lw>`, and the nonce style block holds, once for each `lw` used, exactly this rule: `@media (max-width:480px){.header__title.fit-<lw>{font-size:max(18px,min(40px,calc((100vw - 32px) / <f>)))}}`, with `<f>` equal to `lw × 0.66` written with exactly two decimals (`14` gives `9.24`, `35` gives `23.10`).
+When `lw` is 13 or less the `h1` carries no `fit-` class and the block holds no such rule.
+This `@media` rule lives in the page's nonce block and is not the `@media (max-width: 480px)` block of `board/static/board.css` that R87 counts.
+Check: given a brief line `Review the budget`, expect it in the brief section exactly so, `REVIEW THE BUDGET` nowhere in the page, and in `board/static/board.css` one declaration `text-transform: uppercase` in a rule whose selector holds `brief__text`.
+Check: given the names `Sam`, `Anna Maria Van Der Berg` and `Wolfeschlegelsteinhausenbergerdorff`, expect `<span class="hl">Sam</span>&#8288;.` for the first, five `hl` elements for the second (`Anna`, `Maria`, `Van`, `Der`, `Berg`) separated by single spaces with the last followed by `&#8288;.`, and one `hl` element for the third (longer than 14 characters but with no space); given a name `<b> and Co of Long`, expect the two angle brackets escaped inside their `hl` element.
+Check: given `Sam` (and given a 13-character name with no space), expect no `fit-` class on the title and no `fit-` rule in the nonce block; given `Wolfeschlegelsteinhausenbergerdorff` (35 characters), expect the class `fit-35` on the title and in the nonce block exactly one rule `@media (max-width:480px){.header__title.fit-35{font-size:max(18px,min(40px,calc((100vw - 32px) / 23.10)))}}`; given a 14-character name with no space, expect `fit-14` and `/ 9.24`; given `Anna Maria Van Der Berg`, expect no `fit-` class (its longest word has 5 characters); given two pages with different names, expect each page's block to hold only its own rule; given a name of 200,000 single-letter words, expect the page rendered (no error page) with no `fit-` class.
+
+**R178. Simultaneous calendar events share the width of the day, side by side, and the day body has its height.**
+The layout of `render/cal-layout.mjs` (`layoutDay`) gives each event a lane `i` and its cluster a lane count `n`.
+Events are laid out as boxes at least 30 minutes long, and a cluster is a run of boxes that overlap in time; boxes that only touch (one ends at the minute the next starts) do not overlap and are not in one cluster.
+`n` is the number of lanes the layout gives the cluster, not the number of its events, and is never more than 8; an event past the eighth lane shares lane 8, as the layout does today.
+An event of a cluster with `n` above 1 carries the class `cal-lane-<i>of<n>`; an event in a cluster of one lane has no lane class.
+The nonce style block holds, once for each lane class the page uses, exactly this rule: `.cal-event.cal-lane-<i>of<n>{left:<L>;width:<W>%}` (this selector, with `.cal-event` first; no other form is written).
+`<W>` is `100 / n` and `<L>` is `(i - 1) × 100 / n`, each written as a decimal number with at most three decimals and no trailing zeros (`33.333`, `12.5`, `20`), `<W>` followed by `%`; `<L>` is followed by `%` too, except that the first lane's `left` is written `0` without `%`.
+So the rules for five lanes are `.cal-event.cal-lane-1of5{left:0;width:20%}`, `.cal-event.cal-lane-2of5{left:20%;width:20%}` and so on to `.cal-event.cal-lane-5of5{left:80%;width:20%}`.
+The stylesheet holds no rule for a lane class.
+The day body is `<div class="cal-body cal-h-<N>">`, where `N` is the layout's `endHour - startHour`, and the nonce block holds, once for each `N` the page uses, exactly `.cal-h-<N>{height:calc(var(--cal-hour) * <N>)}`; `--cal-hour` is a token of the stylesheet, not of the theme.
+A calendar with no timed event has no day body and no `cal-h-` class or rule.
+Check: given five events at the same time, expect the classes `cal-lane-1of5` to `cal-lane-5of5` and, in the nonce block, the five rules written above; given three, expect `.cal-event.cal-lane-2of3{left:33.333%;width:33.333%}` and `.cal-event.cal-lane-3of3{left:66.667%;width:33.333%}`; given eight, expect `width:12.5%` and `left:87.5%` for the last; given two events that overlap and a third that overlaps only one of them but can share the first one's lane, expect `n` to be 2 for all three (lanes, not events); given nine simultaneous events, expect lanes `1of8` to `8of8` and the ninth event to carry `cal-lane-8of8`; given one event ending at 09:00 and another starting at 09:00, expect no lane class on either; given events that do not overlap, expect no `cal-lane-` class and no such rule.
+Check: given a calendar whose layout window is 07:00 to 19:00, expect `<div class="cal-body cal-h-12">` and in the nonce block exactly one `.cal-h-12{height:calc(var(--cal-hour) * 12)}`; given an event at 21:00 that widens the window to 07:00 to 22:00, expect `cal-h-15` and its rule; given no events, expect no `cal-h-` class and no `.cal-h-` rule.
 
 ## What setup must leave on GitHub
 

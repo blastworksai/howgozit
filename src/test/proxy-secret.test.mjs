@@ -207,12 +207,40 @@ const IDENTITY_CASES = [
   { name: 'identity present', headers: { [ID]: 'sam' }, present: true },
 ];
 
-// The whole answer of one response, for an exact comparison: status, status line, headers apart from date, body.
+// The nonce of one answer (R77, R172): the one in its Content-Security-Policy, which must be the one on its one nonce
+// attribute in the body. Returns null for an answer that carries none (421, health check, redirect, 401 without a page).
+function nonceOf(res, cell) {
+  const csp = String(res.headers['content-security-policy'] ?? '');
+  const inCsp = [...csp.matchAll(/'nonce-([^']+)'/g)].map((m) => m[1]);
+  const inBody = [...String(res.body).matchAll(/\bnonce="([^"]*)"/g)].map((m) => m[1]);
+  if (inCsp.length === 0 && inBody.length === 0) return null;
+  assert.equal(inCsp.length, 1, `${cell}: exactly one nonce in the policy`);
+  assert.equal(inBody.length, 1, `${cell}: exactly one nonce attribute in the body`);
+  assert.equal(inBody[0], inCsp[0], `${cell}: the style block nonce equals the policy nonce`);
+  return inCsp[0];
+}
+
+// An answer with its own nonce value replaced by the word NONCE in the policy header and in the body.
+function withNonceFixed(res, nonce) {
+  if (nonce === null) return { pairs: withoutDate(res), body: res.body };
+  const fix = (t) => String(t).split(nonce).join('NONCE');
+  return { pairs: withoutDate(res).map(([k, v]) => [k, fix(v)]), body: fix(res.body) };
+}
+
+// The whole answer of one response, for an exact comparison: status, status line, headers apart from date and apart
+// from the nonce value in the policy, body apart from that same nonce value. Each answer's nonce is checked to be
+// single and consistent, and two nonces are fresh per answer (different).
 function sameAnswer(actual, expected, cell) {
   assert.equal(actual.status, expected.status, `${cell}: status`);
   assert.equal(actual.statusLine, expected.statusLine, `${cell}: status line`);
-  assert.deepEqual(withoutDate(actual), withoutDate(expected), `${cell}: headers apart from date`);
-  assert.equal(actual.body, expected.body, `${cell}: body`);
+  const na = nonceOf(actual, `${cell} (actual)`);
+  const nb = nonceOf(expected, `${cell} (expected)`);
+  assert.equal(na === null, nb === null, `${cell}: both or neither carry a nonce`);
+  if (na !== null) assert.notEqual(na, nb, `${cell}: the nonce is fresh per answer`);
+  const a = withNonceFixed(actual, na);
+  const b = withNonceFixed(expected, nb);
+  assert.deepEqual(a.pairs, b.pairs, `${cell}: headers apart from date and nonce`);
+  assert.equal(a.body, b.body, `${cell}: body apart from the nonce`);
 }
 
 // Proof that the lock is really on: a request with a wrong secret and a good identity is refused.
@@ -374,10 +402,7 @@ test('R107 the 401 for a wrong secret and the 401 for a missing identity are equ
       for (const [name, headers] of Object.entries(cases)) {
         const other = await sendRequest(port, { reqPath, headers });
         const cell = `${reqPath} / ${name}`;
-        assert.equal(other.status, missingIdentity.status, `${cell}: status`);
-        assert.equal(other.statusLine, missingIdentity.statusLine, `${cell}: status line`);
-        assert.deepEqual(withoutDate(other), withoutDate(missingIdentity), `${cell}: headers apart from date`);
-        assert.equal(other.body, missingIdentity.body, `${cell}: body`);
+        sameAnswer(other, missingIdentity, cell);
       }
     }
   });
@@ -388,10 +413,7 @@ test('R107 the 401 of a board with the lock is the 401 of a board without it', a
   await withServer({ env: { ...PROXY, BOARD_PROXY_SECRET: SECRET } }, async ({ port }) => {
     const locked = await sendRequest(port, { reqPath: '/', headers: { [H]: WRONG, [ID]: 'sam' } });
     assert.equal(plain.status, 401);
-    assert.equal(locked.status, plain.status);
-    assert.equal(locked.statusLine, plain.statusLine);
-    assert.deepEqual(withoutDate(locked), withoutDate(plain));
-    assert.equal(locked.body, plain.body);
+    sameAnswer(locked, plain, 'locked vs plain 401');
   });
 });
 
@@ -491,9 +513,7 @@ test('R107 the first request after a fresh start with an empty data folder and n
     assert.equal(again.status, 401, 'warm: no header');
     return again;
   });
-  assert.equal(cold.status, warm.status);
-  assert.deepEqual(withoutDate(cold), withoutDate(warm));
-  assert.equal(cold.body, warm.body);
+  sameAnswer(cold, warm, 'cold vs warm 401');
 });
 
 test('R107 a restart over a saved copy in the data folder still refuses the first request without the header', async () => {

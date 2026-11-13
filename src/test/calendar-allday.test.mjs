@@ -329,3 +329,73 @@ test('R106 the helper fails with a clear message on a missing selector', () => {
   assert.throws(() => ruleBlock(CSS, '.cal-no-such-rule'), /no rule with the selector \.cal-no-such-rule/);
   assert.equal(ruleBlock('.a { z-index: 3; } .a { color: var(--x); }', '.a')['z-index'], '3');
 });
+
+// ---- the day view's markup, from PART-MAP D7 and C6 (hooks above stay the same; these pin the new classes) ----
+
+test('R105 the all-day label carries the label class: cal-allday-label lab', () => {
+  const section = calendarSection(render(pageBoard(panelWith({ allDay: [{ title: 'Day off' }] }))));
+  assert.ok(/<span class="cal-allday-label lab">All day<\/span>/.test(section), section);
+});
+
+test('R98 the day view wrapper is cal-day, never the bare cal', () => {
+  const section = calendarSection(render(pageBoard(panelWith({}))));
+  assert.ok(/<div class="cal-day">/.test(section), 'no cal-day wrapper');
+  assert.ok(!/class="cal"/.test(section), 'the old bare cal wrapper is still written');
+});
+
+test('R178 the day body of a 07:00 to 19:00 calendar is cal-body cal-h-12, with its one height rule in the nonce block', () => {
+  const html = render(pageBoard(panelWith({})));
+  assert.ok(/<div class="cal-body cal-h-12">/.test(calendarSection(html)), 'the body has no cal-h-12');
+  const nonce = [...html.matchAll(/<style\b[^>]*nonce="testnonce"[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('');
+  assert.equal(nonce.split('.cal-h-12{height:calc(var(--cal-hour) * 12)}').length - 1, 1, 'no single .cal-h-12 rule in the nonce block');
+});
+
+test('R86 the calendar is a framed section: its outer element class list starts with card and its only child is one card-f', () => {
+  const section = calendarSection(render(pageBoard(panelWith({}))));
+  const open = section.match(/^<(\w+)\b[^>]*>/);
+  assert.ok(open, section);
+  const cls = open[0].match(/\bclass="([^"]*)"/);
+  assert.ok(cls && cls[1].split(/\s+/)[0] === 'card', 'outer class list does not start with card: ' + open[0]);
+  assert.match(section, /^<[^>]+data-section="calendar"[^>]*><div class="card-f">/);
+  assert.ok(section.endsWith('</div></' + open[1] + '>'), 'the card-f is not the only child');
+  assert.equal((section.match(/class="card-f"/g) || []).length, 1);
+});
+
+test('R98 an event is cal-event with its kind, a position and a size, and holds its full title and time in title', () => {
+  const section = calendarSection(render(pageBoard(panelWith({}))));
+  assert.ok(/<div class="cal-event cal-event--meeting cal-event--short x-\d+(?:_\d+)? w-\d+(?:_\d+)?" title="Standup · 08:30–08:45">/.test(section), section);
+  assert.ok(/<div class="cal-event cal-event--focus x-\d+(?:_\d+)? w-\d+(?:_\d+)?" title="Deep work · 09:00–11:00">/.test(section), section);
+});
+
+test('R98 with no event the card says No events today. in the emp frame with its four fixings (PART-MAP C5), not the old empty one', () => {
+  const section = calendarSection(render(pageBoard(panelWith({}, []))));
+  const FIX = '<span class="fix fix--tl"></span><span class="fix fix--tr"></span><span class="fix fix--bl"></span><span class="fix fix--br"></span>';
+  assert.ok(section.includes('<p class="emp">' + FIX + 'No events today.</p>'), section);
+  assert.ok(!/class="empty"/.test(section));
+});
+
+test('R98 the head names its parts: card__title cap, the CAL source tag, and card__note lab for the count', () => {
+  const section = calendarSection(render(pageBoard(panelWith({}))));
+  assert.ok(/<h2 class="card__title cap">Today<\/h2>/.test(section), section);
+  assert.ok(/<span class="tag src" data-src="CAL">CAL<\/span>/.test(section), section);
+  assert.ok(/<span class="card__note lab">2 events<\/span>/.test(section), section);
+});
+
+test('R98 a broken calendar is a strip: a div with the classes al, ch, in and panel-error and data-k err', () => {
+  const section = calendarSection(render(pageBoard({ error: 'unreadable' })));
+  assert.ok(/<div class="al ch in panel-error" data-k="err">/.test(section), section);
+});
+
+test('R106 board.css has a rule for cal-day and none for the bare cal wrapper', () => {
+  assert.ok(Object.keys(ruleBlock(CSS, '.cal-day')).length > 0);
+  assert.throws(() => ruleBlock(CSS, '.cal'), /no rule with the selector \.cal$/);
+});
+
+test('R106 an event box is square and its own container: no clip-path, container-type inline-size', () => {
+  const box = ruleBlock(CSS, '.cal-event');
+  assert.equal(box['clip-path'], undefined, 'the event is clipped');
+  assert.equal(box['container-type'], 'inline-size');
+  for (const kind of ['meeting', 'focus', 'habit', 'personal']) {
+    assert.equal(ruleBlock(CSS, '.cal-event--' + kind)['clip-path'], undefined, kind + ' is clipped');
+  }
+});

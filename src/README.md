@@ -7,6 +7,13 @@ You do not need to be a developer.
 The name comes from flying: a howgozit chart is a running graph of how a flight is going against its plan.
 In the rest of this file it is simply called the board.
 
+## If you are updating
+
+The board has a new look, and everyone's board changes look the next time it is updated.
+The page is now a neutral dark "machine panel" with cut corners, plates and seams.
+Your theme file still works: its colours and fonts apply as before, `radius` now sets the size of the corner cut (0 gives square corners), and `fonts.source` set to `google` keeps your Google fonts.
+The default fonts are now the fonts on your device, so with the default fonts the board makes no outside request at all.
+
 ## What you see on the page
 
 - A greeting with the date, and a small chip for each source showing when it last updated.
@@ -108,9 +115,17 @@ There is no step-by-step guide for a hosting platform.
 - The data repository is private. Setup refuses a public one.
 - The token stays with the server. It appears in no page, log or file.
 - The page links only to GitHub.
-- By default the page loads its fonts from Google's font service, which tells Google the page was opened. To switch that off, set `fonts.source` to `system` in `theme.json`. The page then makes no outside request at all.
+- By default the page uses the fonts already on your device, and makes no outside request at all. If you set `fonts.source` to `google` in `theme.json`, the page loads its fonts from Google's font service, which tells Google the page was opened.
 - There is no analytics and no tracking. Nothing else leaves your computer.
 - The board never writes a file to your repository. Only setup, undo and your agents do.
+
+## Skins
+
+You can give your board a look of its own with a skin.
+A skin is a private folder on the board's own computer that holds one stylesheet, up to six fonts and up to twelve images, and the board wears it on top of its neutral look.
+It is never uploaded anywhere and is not part of your data repository.
+You switch it on by naming the folder in `BOARD_SKIN_DIR`.
+The folder's shape, its limits, a worked example and the steps for each way of running the board are in `references/skins.md`.
 
 ## Undo
 
@@ -126,6 +141,7 @@ Issues are closed rather than deleted.
 - `SKILL.md`: the instructions an agent follows to set the board up.
 - `references/contract.md`: every rule the board follows, each with the check that proves it.
 - `references/agents.md`: how an agent feeds the brief, calendar, inbox and log panels.
+- `references/skins.md`: how to give the board a look of its own with a private folder of your own.
 - `references/calendar-icloud.md`: how to show today's events from your own iCloud calendars.
 - `references/calendar-google.md`: how to show today's events from your own Google calendars.
 - `references/github-notes.md`: notes on how the board uses GitHub.

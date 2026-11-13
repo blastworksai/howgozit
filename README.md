@@ -77,7 +77,7 @@ It works on your phone as well as on a big screen.
 | **How you set it up** | Let an agent do it: it interviews you, proposes your projects and goals, asks for one yes and builds everything. Or do it by hand with three commands |
 | **Which agent** | Any agent that can read a file and run a command. It works best with **[Glitch](https://glitchcatclub.com)** |
 | **Calendar** | iCloud or Google calendars read directly, or a calendar file your agent writes |
-| **Look** | Colours, fonts and layout in one theme file. Set fonts to `system` and the page makes no outside request at all |
+| **Look** | Colours, fonts and the corner cut in one theme file. The default fonts are your device's own, so the page makes no outside request at all. For more, a skin: a private folder of your own that the board wears on top of its look |
 
 ## Works best with Glitch
 
@@ -89,6 +89,16 @@ Glitch can also feed the agent panels: the morning brief, today's calendar, your
 Glitch can also put your inbox on the board by itself: Gmail and Outlook, sender and subject only, never the text (see [`src/references/glitch-feed.md`](src/references/glitch-feed.md)). Calendar through Glitch comes later.
 
 No Glitch? Any agent works, and so does no agent at all.
+
+## Updating, and giving it your own look
+
+If you are updating, the look changes: the page is now a neutral dark "machine panel" with cut corners, plates and seams.
+Your theme file still works.
+The default fonts are now the fonts on your device, so the page makes no outside request unless you set `fonts.source` to `google`.
+
+You can also give your board a look of its own with a skin: a private folder on the board's own computer with one stylesheet, up to six fonts and up to twelve images.
+It is yours, and it is never uploaded anywhere.
+The guide is [`src/references/skins.md`](src/references/skins.md).
 
 ## Get started
 

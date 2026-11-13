@@ -144,6 +144,9 @@ export function readEnv(processEnv) {
     formKey,
     startWarnings: gh.warnings,
   };
+  // R165: the skin folder. The key exists only when the setting names one, so a board without a skin has the same env as before.
+  const skinDir = pick(src, 'BOARD_SKIN_DIR');
+  if (skinDir !== null) env.skinDir = skinDir;
   // The GitHub env object gains no key (the off-path law); only a Notion board carries these two.
   if (backend === 'notion') {
     env.backend = 'notion';

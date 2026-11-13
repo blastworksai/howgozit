@@ -135,14 +135,30 @@ test('R148 given a Notion board, a GitHub address still gets an href (Notion and
   assert.ok(!all.some((h) => h.startsWith('https://example.com')));
 });
 
-test('R148 every href of a Notion page is Notion, GitHub, the stylesheet or the font stylesheet', () => {
+test('R148 every href of a Notion page is Notion, GitHub or the stylesheet; the default fonts are system, so no font stylesheet (R84)', () => {
   const html = render(notionFixture());
   const all = hrefs(html);
   assert.ok(all.length > 0);
   for (const h of all) {
+    const ok = h.startsWith(NOTION) || h.startsWith('https://github.com/') || h === '/static/board.css';
+    assert.ok(ok, 'unexpected href ' + h);
+  }
+});
+
+test('R148 with google fonts a Notion page also links the one font stylesheet', () => {
+  const google = resolveTheme({ fonts: { source: 'google' } }).theme;
+  const all = hrefs(renderPage(notionFixture(), google, OPTS));
+  for (const h of all) {
     const ok = h.startsWith(NOTION) || h.startsWith('https://github.com/') || h === '/static/board.css' || h.startsWith('https://fonts.googleapis.com/css2?');
     assert.ok(ok, 'unexpected href ' + h);
   }
+  assert.equal(all.filter((h) => h.startsWith('https://fonts.googleapis.com/css2?')).length, 1);
+});
+
+test('R88 on a Notion board the source tag is the pack tag: class "tag src" with data-src NT', () => {
+  const html = render(notionFixture());
+  assert.ok(count(html, /<span class="tag src" data-src="NT">NT<\/span>/g) >= 7, 'NT on the seven cards');
+  assert.equal(count(html, /<span class="tag src" data-src="[^"]*">/g), count(html, /\sdata-src="/g), 'every data-src is on <span class="tag src">');
 });
 
 test('R148 the Notion address prefix is exact: the host must end at the slash', () => {

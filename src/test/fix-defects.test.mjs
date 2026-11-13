@@ -118,7 +118,8 @@ function bannerText(reason) {
   const b = JSON.parse(JSON.stringify(FULL));
   b.meta.stale = { since: '2026-10-12T05:00:00Z', reason };
   const html = renderPage(b, resolveTheme(null).theme, { styleNonce: 'n', formToken: () => 't' });
-  const m = /<p class="banner" data-banner[^>]*>([\s\S]*?)<\/p>/.exec(html);
+  // C6: the banner is an alert strip; the reason sentence sits in the span after the headline.
+  const m = /<div class="al ch in banner" data-k="warn" data-banner role="status">([\s\S]*?)<\/div><\/div>/.exec(html);
   assert.ok(m, 'a banner is present');
   const text = m[1].replace(/<[^>]*>/g, '');
   assert.ok(text.length > 0);

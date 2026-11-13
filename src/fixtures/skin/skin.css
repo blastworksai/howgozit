@@ -1,0 +1,28 @@
+/* Neutral test skin: made for the tests, carries no brand.
+   fonts/neutral.woff2 is a stand-in file (starts with the wOF2 signature), not a real font.
+   A small coherent light look: every text and background pair below is at least 4.5:1. */
+@font-face {
+  font-family: "Neutral Test";
+  src: url("fonts/neutral.woff2") format("woff2");
+}
+html[data-skin] {
+  --ground: #f6f7f9;
+  --dot: #d3d8df;
+  --card: #ffffff;
+  --border: #b9c0cb;
+  --ink: #1c2230;
+  --muted: #4a5568;
+  --faint: #5b6577;
+  --agent-bg: #e8edf5;
+  --agent-ink: #1c2a40;
+  --accent: #1f4f8f;
+  --on-accent: #ffffff;
+  --hot: #8a3b00;
+  --hot-ink: #a1201a;
+  --ok: #1b6b3a;
+  background-image: url("img/neutral.png");
+}
+html[data-skin] body { font-family: "Neutral Test", var(--font-body); color: var(--ink); }
+html[data-skin] .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+html[data-skin] .lab { color: var(--muted); }
+html[data-skin] .tag { color: var(--accent); }

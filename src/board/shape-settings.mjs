@@ -22,13 +22,13 @@ const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 
 export const DEFAULT_THEME = deepFreeze({
   colors: {
-    ground: '#E9ECEF', dot: '#D3D8DE', card: '#FFFFFF', border: '#D5D9DE',
-    ink: '#111418', muted: '#5B6470', faint: '#7A8390',
-    agentBg: '#111418', agentInk: '#F1F3F5',
-    accent: '#D4F25A', hot: '#FF5B1F', hotInk: '#B23A0A', ok: '#2F9E6B',
+    ground: '#131415', dot: '#2C2E30', card: '#1F2123', border: '#38393C',
+    ink: '#ECEDED', muted: '#A9ACAF', faint: '#93979A',
+    agentBg: '#2C3A3C', agentInk: '#EAF2F2',
+    accent: '#4FD1B5', hot: '#EF6A52', hotInk: '#FF9C88', ok: '#5FCB8A',
   },
   projectColors: ['#7FE7D3', '#FFC94D', '#C9B6FF', '#FF9E80', '#8FB8FF', '#B7E38A'],
-  fonts: { source: 'google', heading: 'Bricolage Grotesque', body: 'Geist', mono: 'Geist Mono' },
+  fonts: { source: 'system', heading: 'Bricolage Grotesque', body: 'Geist', mono: 'Geist Mono' },
   radius: 20,
 });
 

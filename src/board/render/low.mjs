@@ -2,6 +2,8 @@
 // Pure: (board, ui) -> string. Every board string goes through ui.esc (R73);
 // a link exists only through ui.href (R74); the log section never links (R53).
 
+import { STALE_BADGE, emp, frame, panelError } from './parts.mjs';
+
 const clamp = (n) => Math.max(0, Math.min(100, Number.isFinite(n) ? Math.round(n * 10) / 10 : 0));
 
 // A title that is a link when its address is a GitHub one, plain text otherwise.
@@ -12,15 +14,17 @@ function titled(ui, cls, text, url) {
     : `<span class="${cls}">${ui.esc(text)}</span>`;
 }
 
+// The section frame (PART-MAP C3): a pack card around one card-f face.
+// `cls` is the outer class list and always starts with `card`.
+
 function card(ui, name, title, tag, note, body, extra = {}) {
   const cls = extra.cls || 'card';
   const stale = extra.stale ? ' data-stale="true"' : '';
-  const badge = extra.stale ? '<span class="badge badge--stale">Out of date</span>' : '';
-  const noteHtml = note === '' ? '' : `<span class="card__note">${ui.esc(note)}</span>`;
-  return `<section class="${cls}" data-section="${name}"${stale}>`
-    + `<div class="card__head"><h2 class="card__title">${ui.esc(title)}</h2>`
-    + `<span class="card__meta">${badge}${ui.src(tag)}${noteHtml}</span></div>`
-    + body + '</section>';
+  const badge = extra.stale ? STALE_BADGE : '';
+  const noteHtml = note === '' ? '' : `<span class="card__note lab">${ui.esc(note)}</span>`;
+  return frame(cls, name, stale,
+    `<div class="card__head"><h2 class="card__title cap">${ui.esc(title)}</h2><span class="card__meta">${badge}${ui.src(tag)}${noteHtml}</span></div>`
+    + body);
 }
 
 export function heatmap(board, ui) {
@@ -34,7 +38,7 @@ export function heatmap(board, ui) {
     return `<span class="heat__cell heat__cell--l${lvl}" title="${date} · ${ui.esc(String(d.count ?? 0))}"></span>`;
   };
   const cols = weeks.map((w) => `<div class="heat__week">${(w || []).map(cell).join('')}</div>`).join('');
-  const legend = '<div class="heat__legend"><span>Less</span>'
+  const legend = '<div class="heat__legend lab"><span>Less</span>'
     + [0, 1, 2, 3, 4].map((l) => `<span class="heat__cell heat__cell--l${l}"></span>`).join('')
     + '<span>More</span></div>';
   const body = `<div class="heat" role="img" aria-label="Items closed per day over the last 12 weeks">${cols}</div>${legend}`;
@@ -49,7 +53,7 @@ function projectRow(p, ui) {
     : `${p.done}/${p.total} · ${p.pct}%`;
   const bar = p.empty
     ? ''
-    : `<div class="bar bar--thin"><span class="bar__fill ${ui.w(clamp(p.pct))}"></span></div>`;
+    : `<div class="bar bar--thin"><i class="${ui.w(clamp(p.pct))}"></i></div>`;
   const stats = [`<span>${ui.esc(String(p.doing ?? 0))} in progress</span>`];
   if (p.overdueMilestones > 0) {
     const n = p.overdueMilestones;
@@ -68,12 +72,12 @@ function projectRow(p, ui) {
   }
   const habits = (p.habits || []).length
     ? '<div class="project__habits">'
-      + p.habits.map((h) => `<span class="badge">${ui.esc(h.title)} · ${ui.esc(String(h.streak))}</span>`).join('')
+      + p.habits.map((h) => `<span class="tag tag--line">${ui.esc(h.title)} · ${ui.esc(String(h.streak))}</span>`).join('')
       + '</div>'
     : '';
-  return `<li class="project ${pc}"${focus}>`
+  return `<li class="ls-r project ${pc}"${focus}>`
     + `<div class="project__head">${titled(ui, 'project__title', p.title, p.url)}`
-    + `<span class="project__count">${ui.esc(count)}</span></div>`
+    + `<span class="project__count lab">${ui.esc(count)}</span></div>`
     + bar
     + `<div class="project__stats">${stats.join('')}</div>`
     + habits + '</li>';
@@ -82,8 +86,8 @@ function projectRow(p, ui) {
 export function projects(board, ui) {
   const list = board.projects || [];
   const body = list.length
-    ? `<ul class="projects">${list.map((p) => projectRow(p, ui)).join('')}</ul>`
-    : '<p class="empty">No projects yet. Run setup, or add one in board.config.json.</p>';
+    ? `<ul class="ls ls--flow projects">${list.map((p) => projectRow(p, ui)).join('')}</ul>`
+    : emp('No projects yet. Run setup, or add one in board.config.json.');
   return card(ui, 'projects', 'Projects', ui.tag, '', body);
 }
 
@@ -93,16 +97,16 @@ export function log(board, ui) {
   const agent = (board.meta && board.meta.agentName) || 'Agent';
   const cls = 'card card--agent';
   if (panel.error) {
-    const body = '<p class="panel-error">This file could not be read. Check state/log.json in the data repo.</p>';
+    const body = panelError('This file could not be read. Check state/log.json in the data repo.');
     return card(ui, 'log', `${agent} did`, agent, '', body, { cls });
   }
   const entries = panel.entries || [];
   const body = entries.length
-    ? '<ol class="log">' + entries.map((e) => '<li class="log__item">'
-      + `<span class="log__t">${ui.esc(e.t)}</span>`
-      + `<span class="log__body"><span>${ui.esc(e.what)}</span><span class="log__agent">${ui.esc(e.agent)}</span></span>`
+    ? '<ol class="ls ls--flow log">' + entries.map((e) => '<li class="ls-r log__item">'
+      + `<span class="log__t lab">${ui.esc(e.t)}</span>`
+      + `<span class="log__body"><span>${ui.esc(e.what)}</span><span class="log__agent lab">${ui.esc(e.agent)}</span></span>`
       + '</li>').join('') + '</ol>'
-    : '<p class="empty">Nothing logged yet.</p>';
+    : emp('Nothing logged yet.');
   return card(ui, 'log', `${agent} did`, agent, '', body, { cls, stale: !!panel.stale });
 }
 
@@ -118,7 +122,7 @@ function suggestionHtml(item, board, ui) {
     if (s.milestoneTitle) what += ` · ${s.milestoneTitle}`;
   }
   const why = `${s.why || ''}${s.stale ? ' · Out of date' : ''}`;
-  const accept = s.acceptable ? ui.form('sort', item.ref ?? item.number, { accept: '1' }, 'Accept') : '';
+  const accept = s.acceptable ? ui.form('sort', item.ref ?? item.number, { accept: '1' }, 'Accept', '', { kind: 'pri', small: true }) : '';
   return '<div class="suggestion"><div class="suggestion__text">'
     + `<span>${ui.esc(agent)} suggests: ${ui.esc(what)}</span>`
     + `<span class="suggestion__why">${ui.esc(why)}</span></div>${accept}</div>`;
@@ -132,7 +136,7 @@ function sortSelect(targets, ui) {
       opts.push(`<option value="${ui.esc(`${t.key}/${m.number}`)}">${ui.esc(`${t.title} · ${m.shortTitle}`)}</option>`);
     }
   }
-  return `<select name="target" aria-label="Project and milestone">${opts.join('')}</select>`;
+  return `<span class="sel"><select name="target" aria-label="Project and milestone">${opts.join('')}</select></span>`;
 }
 
 export function ideas(board, ui) {
@@ -141,21 +145,21 @@ export function ideas(board, ui) {
   const targets = board.sortTargets || [];
   const select = targets.length ? sortSelect(targets, ui) : '';
   const li = (item) => {
-    const sortForm = targets.length ? ui.form('sort', item.ref ?? item.number, {}, 'Move', select) : '';
+    const sortForm = targets.length ? ui.form('sort', item.ref ?? item.number, {}, 'Move', select, { kind: 'sm' }) : '';
     const sort = sortForm
-      ? '<div class="idea__actions"><details class="sort"><summary>Sort</summary>'
-        + `<div class="sort__form">${sortForm}</div>`
-        + '</details><p data-message></p></div>'
+      ? '<div class="idea__actions"><div class="ac"><details class="ac-i sort"><summary class="b sm"><span class="b-f"><span class="b-n"></span><i class="ac-m"></i>Sort</span></summary>'
+        + `<div class="ac-p sort__form">${sortForm}</div>`
+        + '</details></div><p data-message></p></div>'
       : '';
-    return '<li class="idea"><div class="idea__top">'
+    return '<li class="ls-r idea"><div class="idea__top">'
       + titled(ui, 'idea__title', item.title, item.url)
-      + `<span class="idea__date">${ui.esc(item.createdAt || '')}</span></div>`
+      + `<span class="idea__date lab">${ui.esc(item.createdAt || '')}</span></div>`
       + suggestionHtml(item, board, ui)
       + sort + '</li>';
   };
   const body = items.length
-    ? `<ul class="ideas">${items.map(li).join('')}</ul>`
-    : `<p class="empty">${ui.readOnly ? 'No ideas yet.' : 'No ideas yet. Log one above.'}</p>`;
+    ? `<ul class="ls ls--flow ideas">${items.map(li).join('')}</ul>`
+    : emp(ui.readOnly ? 'No ideas yet.' : 'No ideas yet. Log one above.');
   return card(ui, 'ideas', 'Ideas', ui.tag, `${data.shown ?? items.length} of ${data.count ?? items.length}`, body);
 }
 
@@ -164,16 +168,16 @@ export function standalone(board, ui) {
   if (!data || !data.count) return '';
   const items = data.items || [];
   const li = (t) => {
-    const close = ui.form('close', t.number, {}, 'Close');
-    return '<li class="solo"><div class="solo__top">'
+    const close = ui.form('close', t.number, {}, 'Close', '', { kind: 'close' });
+    return '<li class="ls-r solo"><div class="solo__top">'
       + titled(ui, 'solo__title', t.title, t.url)
-      + (t.due ? `<span class="meta">due ${ui.esc(t.due)}</span>` : '')
+      + (t.due ? `<span class="meta lab">due ${ui.esc(t.due)}</span>` : '')
       + (close ? `<div class="solo__close">${close}</div>` : '')
       + '</div></li>';
   };
   const more = data.count > items.length
-    ? `<p class="meta">Showing ${ui.esc(String(items.length))} of ${ui.esc(String(data.count))}.</p>`
+    ? `<p class="meta lab">Showing ${ui.esc(String(items.length))} of ${ui.esc(String(data.count))}.</p>`
     : '';
-  const body = `<ul class="standalone">${items.map(li).join('')}</ul>${more}`;
+  const body = `<ul class="ls ls--flow standalone">${items.map(li).join('')}</ul>${more}`;
   return card(ui, 'standalone', 'Standalone', ui.tag, `${data.count} open`, body);
 }

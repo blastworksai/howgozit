@@ -209,6 +209,9 @@ function installStdCapture(cap) {
   };
 }
 
+// A broken card carries the class panel-error as one token among others (PART-MAP C6), on whatever element.
+const hasPanelError = (s) => /class="[^"]*\bpanel-error\b[^"]*"/.test(s);
+
 // The text of one section of the page, from its opening tag to the next section or the end.
 function sectionOf(html, name) {
   const at = html.indexOf(`data-section="${name}"`);
@@ -347,7 +350,7 @@ test('R96 the block without an iCloud sign-in gives the broken card and the no-l
   assert.equal(status, 200);
   const cal = sectionOf(html, 'calendar');
   assert.ok(cal, 'the page has no calendar section');
-  assert.ok(cal.includes('class="panel-error"'), 'the calendar section is not the broken card');
+  assert.ok(hasPanelError(cal), 'the calendar section is not the broken card');
   assert.ok(!cal.includes('Standup'), 'the state file\'s event shows although the settings name iCloud calendars');
   const footer = sectionOf(html, 'footer');
   assert.ok(footer, 'the page has no footer');
@@ -557,7 +560,7 @@ test('U the calendar section finder and the broken card marker see what the test
     brokenHtml = (await ctx.page(await ctx.boot({ sub: 'b' }), 'no login')).res.body;
   }, { block: CALENDAR_BLOCK, env: {} });
   assert.ok(sectionOf(okHtml, 'calendar').includes('Standup'));
-  assert.ok(!sectionOf(okHtml, 'calendar').includes('class="panel-error"'));
-  assert.ok(sectionOf(brokenHtml, 'calendar').includes('class="panel-error"'));
+  assert.ok(!hasPanelError(sectionOf(okHtml, 'calendar')));
+  assert.ok(hasPanelError(sectionOf(brokenHtml, 'calendar')));
   assert.equal(sectionOf('<p>none</p>', 'calendar'), null);
 });

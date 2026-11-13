@@ -145,10 +145,10 @@ function comparablePage(html) {
     .replace(/https?:\/\/[^\s"'<>]*/g, 'URL')
     .replace(/data-src="(?:GH|NT)">(?:GH|NT)</g, 'data-src="TAG">TAG<')
     // the back-end's own name in a source chip and in the idea box's hint (R88, R148 name them per back-end)
-    .replace(/<span class="chip__name">(?:GitHub|Notion)<\/span>/g, '<span class="chip__name">BACKEND</span>')
+    .replace(/(<span class="bdg chip__name"><span class="pad (?:ok|warn|err)"><\/span>)<span class="chip__label">(?:GitHub|Notion)<\/span>/g, '$1<span class="chip__label">BACKEND</span>')
     .replace(/It becomes a (?:GitHub issue|Notion row)\./g, 'It becomes BACKEND.')
     // the footer link's text names the back-end (cp9-interface §5): "Data repo" on GitHub, "Notion" on Notion
-    .replace(/(<p class="footer__time">[^]*?<a href="URL">)(?:Data repo|Notion)</g, '$1DATA<');
+    .replace(/(<p class="ft-b lab footer__time"><span>[^]*?<a href="URL">)(?:Data repo|Notion)</g, '$1DATA<');
 }
 
 async function both() {
@@ -190,5 +190,10 @@ test('R149 the two pages are the same once urls and the GH/NT tag are removed', 
   const a = comparablePage(renderPage(ghBoard, gh.bundle.theme, opts));
   const b = comparablePage(renderPage(ntBoard, nt.bundle.theme, opts));
   assert.ok(a.length > 1000);
+  // not vacuous: each normaliser rule really met the pack markup, so a markup change cannot silently turn them into no-ops
+  for (const needle of ['data-src="TAG">TAG<', '<span class="chip__label">BACKEND</span>', 'It becomes BACKEND.', '<a href="URL">DATA<']) {
+    assert.ok(a.includes(needle), 'the normaliser met ' + needle);
+    assert.ok(b.includes(needle), 'the normaliser met ' + needle + ' on the Notion page');
+  }
   assert.equal(b, a);
 });

@@ -32,6 +32,8 @@ Environment=BOARD_PORT=8787
 Environment=BOARD_ALLOWED_HOSTS=board.example.com
 Environment=BOARD_IDENTITY_HEADER=X-Forwarded-User
 Environment=BOARD_DATA_DIR=/var/lib/board/board-data
+# Optional skin (references/skins.md). Keep it under /etc/board/skin: the lines below hide home, /opt, /srv and /mnt.
+# Environment=BOARD_SKIN_DIR=/etc/board/skin
 EnvironmentFile=/etc/board/board.env
 EnvironmentFile=/etc/board/proxy_secret.env
 ExecStartPre=/bin/sh -c 'test -n "$BOARD_PROXY_SECRET" && test -n "$BOARD_GITHUB_TOKEN" && test -n "$BOARD_REPO"'

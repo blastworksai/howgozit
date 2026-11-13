@@ -121,7 +121,7 @@ function pageEvents(html) {
 function pageAllDay(html) {
   const m = calendarSection(html).match(ALLDAY_EL);
   assert.ok(m, 'no data-allday element');
-  const inner = m[2].replace(/<span class="cal-allday-label">[^<]*<\/span>/, '');
+  const inner = m[2].replace(/<span class="cal-allday-label(?: [^"]*)?">[^<]*<\/span>/, '');
   return inner.split(' · ').map((seg) => {
     const word = [...seg.matchAll(SOURCE_EL)].map((x) => unesc(x[1]));
     assert.equal(word.length, 1, 'each all-day title needs one data-source element: ' + seg);
@@ -129,7 +129,7 @@ function pageAllDay(html) {
   });
 }
 const head = (html) => {
-  const m = calendarSection(html).match(/card__note">(\d+) events?</);
+  const m = calendarSection(html).match(/card__note(?: [^"]*)?">(\d+) events?</);
   assert.ok(m, 'no event count in the head of the calendar card');
   return Number(m[1]);
 };

@@ -141,10 +141,10 @@ test('R67 a board that is not stale has no banner', () => {
   assert.ok(sectionNames(html).includes('header'));
 });
 
-test('R87 the stylesheet has one 480px block: one column, sticky bottom capture', () => {
+test('R87 the stylesheet has one 480px block: one column on the four row classes, two columns on the habit grid, sticky bottom capture', () => {
   const css = readFileSync(here('../board/static/board.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const re = /@media\s*\(\s*max-width\s*:\s*480px\s*\)/g;
-  assert.equal(count(css, re), 1, 'exactly one @media (max-width: 480px)');
+  assert.equal(count(css, re), 1, 'exactly one @media (max-width: 480px) in board.css');
   const open = css.search(re);
   const brace = css.indexOf('{', open);
   assert.ok(brace > open);
@@ -159,9 +159,39 @@ test('R87 the stylesheet has one 480px block: one column, sticky bottom capture'
   }
   assert.ok(end > brace, 'block is closed');
   const block = css.slice(brace + 1, end);
-  assert.match(block, /position\s*:\s*sticky/);
-  assert.match(block, /bottom\s*:\s*0(?![.\d])/);
-  assert.match(block, /grid-template-columns\s*:\s*(1fr|minmax\(\s*0\s*,\s*1fr\s*\))/);
+  // the plain rules at the top level of the block: later rules win, a selector counts only when it is the whole selector
+  const decls = new Map();
+  let at = 0;
+  while (at < block.length) {
+    const o = block.indexOf('{', at);
+    if (o < 0) break;
+    let d = 1;
+    let k = o + 1;
+    while (k < block.length && d > 0) { if (block[k] === '{') d++; else if (block[k] === '}') d--; k++; }
+    const sel = block.slice(at, o).trim();
+    const body = block.slice(o + 1, k - 1);
+    if (!sel.startsWith('@') && !body.includes('{')) {
+      for (const one of sel.split(',').map((x) => x.trim())) {
+        const m = decls.get(one) || {};
+        for (const part of body.split(';')) {
+          const c = part.indexOf(':');
+          if (c > 0) m[part.slice(0, c).trim().toLowerCase()] = part.slice(c + 1).replace(/!important/i, '').trim();
+        }
+        decls.set(one, m);
+      }
+    }
+    at = k;
+  }
+  const tracks = (v) => { const t = (v || '').replace(/\s+/g, ' ').replace(/,\s*/g, ',').trim(); return t; };
+  for (const sel of ['.row-brief', '.row-trio', '.row-low', '.row-ideas']) {
+    const v = tracks(decls.get(sel)?.['grid-template-columns']);
+    assert.ok(v === '1fr' || v === 'minmax(0,1fr)', sel + ' is one column inside the 480px block, found "' + v + '"');
+  }
+  const hg = tracks(decls.get('.habit-grid')?.['grid-template-columns']);
+  const two = /^repeat\(\s*2\s*,\s*(?:1fr|minmax\(0,1fr\))\s*\)$/.test(hg) || /^(?:1fr|minmax\(0,1fr\)) (?:1fr|minmax\(0,1fr\))$/.test(hg);
+  assert.ok(two, '.habit-grid has exactly two tracks inside the 480px block, found "' + hg + '"');
+  assert.equal(decls.get('.capture')?.position, 'sticky', '.capture is sticky');
+  assert.match(decls.get('.capture')?.bottom ?? '', /^0(?:px)?$/, '.capture sticks to bottom: 0');
 });
 
 test('R88 every card carries its source tag', () => {
@@ -267,4 +297,144 @@ test('R91 every form holds a hidden input with the token for its action and targ
     const re = new RegExp('^tok-habit-' + h.id + ':' + FULL.meta.today + ':(on|off)$');
     assert.ok([...tokens].some((v) => re.test(v)), 'habit form for ' + h.id);
   }
+});
+
+// ---- Pack rebuild (part map C1, C2, C3, C5, C6, D1, D2, D16, F4): the page frame and its shared helpers ----
+
+const classTokens = (html) => [...html.matchAll(/\sclass="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/).filter(Boolean));
+
+test('R67 the stale banner is the alert strip: exactly the contract markup, with the reason and stamp escaped', () => {
+  const b = copy(FULL);
+  b.meta.stale = { since: '2026-10-12T05:00:00Z', reason: 'GitHub did not answer <i>&"' };
+  const html = render(b);
+  const m = html.match(/<div class="al ch in banner" data-k="warn" data-banner role="status"><span class="pad warn"><\/span><div class="al-t"><b class="cap banner__title">Showing the last good read\.<\/b><span>([^<]*)\. Data from ([^<]*)\.<\/span><\/div><\/div>/);
+  assert.ok(m, 'the banner is the exact C6 markup');
+  assert.ok(m[1].includes('GitHub did not answer &lt;i&gt;&amp;&quot;'), 'the reason is escaped: ' + m[1]);
+  assert.ok(m[2].length > 0, 'a stamp');
+  assert.equal(count(html, /<p class="banner"/g), 0, 'never a p');
+  assert.equal(count(html, /\sdata-banner(?=[\s=>/])/g), 1);
+});
+
+test('R88 every source tag is the pack tag: class "tag src" with data-src', () => {
+  const html = render(FULL);
+  const all = count(html, /\sdata-src="/g);
+  assert.ok(all >= 10, 'the full page has many source tags, found ' + all);
+  assert.equal(count(html, /<span class="tag src" data-src="[^"]*">[^<]*<\/span>/g), all, 'every data-src is on <span class="tag src">');
+});
+
+test('R91 a key form ends in one submit button holding b-n, b-z and the label inside b-f; the label is a bare text node', () => {
+  const html = render(FULL);
+  const seen = new Set();
+  for (const f of forms(html)) {
+    const action = attr(formTag(f), 'action');
+    if (action === '/actions/close') continue;
+    assert.equal(count(f, /<button\b/gi), 1, 'one button in the ' + action + ' form');
+    const m = f.match(/<button type="submit" class="(b[^"]*)"((?: aria-pressed="true")?)><span class="b-f"><span class="b-n"><\/span><span class="b-z" aria-hidden="true"><\/span>([^<]*)<\/span><\/button><\/form>$/);
+    assert.ok(m, 'the ' + action + ' key is the C1 markup and the last child of its form');
+    const [, klass, pressed, label] = m;
+    if (action === '/actions/idea') { assert.equal(klass, 'b pri'); assert.equal(label, 'Log idea'); }
+    else if (hiddenInputs(f).some((t) => attr(t, 'name') === 'accept')) { assert.equal(klass, 'b sm pri'); assert.equal(label, 'Accept'); }
+    else if (action === '/actions/sort') { assert.equal(klass, 'b sm'); assert.equal(label, 'Move'); }
+    else if (action === '/actions/habit') {
+      assert.equal(klass, 'b sm');
+      assert.ok(label === 'Mark done' || label === 'Done today', label);
+      assert.equal(pressed !== '', label === 'Done today', 'aria-pressed only on the done key');
+    }
+    seen.add(action + (hiddenInputs(f).some((t) => attr(t, 'name') === 'accept') ? '+accept' : ''));
+  }
+  for (const k of ['/actions/idea', '/actions/habit', '/actions/sort', '/actions/sort+accept']) assert.ok(seen.has(k), 'a key for ' + k);
+});
+
+test('R91 the close form holds one close box button: class ck, a box with a tick, the label in sr-only', () => {
+  const html = render(FULL);
+  const closes = forms(html).filter((f) => attr(formTag(f), 'action') === '/actions/close');
+  assert.ok(closes.length >= 2, 'several close forms');
+  for (const f of closes) {
+    assert.equal(count(f, /<button\b/gi), 1);
+    assert.match(f, /<button type="submit" class="ck"><span class="box" aria-hidden="true"><svg viewBox="0 0 30 30"><polyline points="8,15 13,20 22,10"\/><\/svg><\/span><span class="sr-only">Close<\/span><\/button><\/form>$/);
+  }
+});
+
+// The inner html of the element of the given open tag regexp, up to its closing tag (these elements do not nest).
+function inner(html, openRe, closeTag) {
+  const m = openRe.exec(html);
+  assert.ok(m, 'no element matches ' + openRe);
+  const start = m.index + m[0].length;
+  return html.slice(start, html.indexOf(closeTag, start));
+}
+// True when the html is exactly one <div class="card-f">...</div> (balanced, nothing before or after it).
+function isSingleCardF(h) {
+  if (!h.startsWith('<div class="card-f">')) return false;
+  let depth = 0;
+  for (const t of h.matchAll(/<div\b|<\/div>/g)) {
+    depth += t[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return t.index + t[0].length === h.length;
+  }
+  return false;
+}
+
+test('R86 the twelve framed sections are a card with one card-f as their only child; header, capture, habits and footer are not frames', () => {
+  const html = render(FULL);
+  const FRAMES = ['brief', 'season', 'focus', 'timeline', 'calendar', 'inbox', 'next', 'heatmap', 'projects', 'log', 'ideas', 'standalone'];
+  for (const n of FRAMES) {
+    const open = new RegExp('<section class="card(?: [^"]*)?" data-section="' + n + '"[^>]*>');
+    assert.ok(isSingleCardF(inner(html, open, '</section>')), n + ': the only child is one <div class="card-f">');
+  }
+  for (const n of ['brief', 'log']) assert.match(html, new RegExp('<section class="card card--agent(?: card--wide)?" data-section="' + n + '"'));
+  assert.match(html, /<header class="header" data-section="header">/);
+  assert.match(html, /<section class="capture" data-section="capture">/);
+  assert.match(html, /<footer class="ft footer" data-section="footer">/);
+  assert.match(html, /<section class="habit-section" data-section="habits">/);
+  const tiles = [...html.matchAll(/<article class="card habit[^"]*"[^>]*>/g)];
+  assert.ok(tiles.length >= 2, 'habit tiles are cards');
+  for (const t of tiles) {
+    const h = html.slice(t.index + t[0].length, html.indexOf('</article>', t.index));
+    assert.ok(isSingleCardF(h), 'each habit tile has one card-f');
+  }
+  for (const n of ['header', 'capture', 'habits', 'footer']) assert.doesNotMatch(html, new RegExp('<[a-z]+ class="card[ "][^>]*data-section="' + n + '"'), n + ' is not a frame');
+});
+
+test('U the retired class names are gone from the page', () => {
+  const RETIRED = ['empty', 'dot', 'dot--ok', 'dot--stale', 'dot--error', 'dot--agent', 'badge', 'badge--accent', 'badge--hot', 'badge--ok', 'badge--stale',
+    'bar__fill', 'bar__fill--ink', 'bar__fill--hot', 'chip--focus', 'chip--small', 'btn', 'btn--primary', 'btn--accent', 'btn--done', 'btn--small', 'mono', 'tl', 'cal'];
+  for (const b of [FULL, MIN]) {
+    const tokens = new Set(classTokens(render(b)));
+    for (const r of RETIRED) assert.ok(!tokens.has(r), 'the class ' + r + ' is retired (part map F4, H)');
+  }
+});
+
+test('U an empty state is the emp frame with four fixings, and the empty focus row keeps focus__empty', () => {
+  const focus = need(cut(render(MIN)), 'focus');
+  assert.ok(focus.includes('<p class="emp focus__empty"><span class="fix fix--tl"></span><span class="fix fix--tr"></span><span class="fix fix--bl"></span><span class="fix fix--br"></span>'));
+  assert.match(focus, /No focus set<\/p>/);
+  assert.equal(count(render(MIN), /class="empty"/g), 0);
+});
+
+test('U the header: a lab date line with a pad, a cap title, the sources list, a rail, and no brandmark or image', () => {
+  const html = render(FULL);
+  const header = need(cut(html), 'header');
+  assert.ok(header.startsWith('<header class="header" data-section="header">'));
+  assert.match(header, /<div class="header__main"><p class="header__date lab"><span class="pad"><\/span>[^<]+<\/p><h1 class="header__title cap(?: fit-\d+)?">/);
+  assert.ok(header.includes('<ul class="sources" aria-label="Sources">'));
+  assert.match(header, /<li class="chip"><span class="bdg chip__name"><span class="pad (?:ok|warn|err)"><\/span><span class="chip__label">[^<]+<\/span><\/span><span class="lab chip__state">[^<]+<\/span><\/li>/);
+  assert.match(header, /<div class="rail" aria-hidden="true"><\/div>\s*<\/header>/);
+  assert.ok(!header.includes('brandmark') && !/<img\b/i.test(html), 'the product writes no brandmark and no image (J1)');
+});
+
+test('U the capture section: a field wrapper with a floor, the b pri key, then the message paragraph', () => {
+  const capture = need(cut(render(FULL)), 'capture');
+  assert.ok(capture.includes('<span class="fx"><input id="idea-title" type="text" name="title" maxlength="200" required placeholder="Log an idea. It becomes a GitHub issue."><span class="floor"></span></span>'));
+  assert.match(capture, /<\/form>\s*<p data-message><\/p>\s*<\/section>/);
+});
+
+test('U the footer: ft footer, a closing rail, and the time line in ft-b lab footer__time around one span', () => {
+  const html = render(FULL);
+  const footer = need(cut(html), 'footer');
+  assert.ok(footer.startsWith('<footer class="ft footer" data-section="footer">'));
+  assert.match(footer, /<div class="rail" aria-hidden="true"><\/div>\s*<p class="ft-b lab footer__time"><span>Data from [^<]+ · [^<]+ · (?:<a href="[^"]+">Data repo<\/a>|Data repo)<\/span><\/p>/);
+  const b = copy(FULL);
+  b.meta.readOnly = true;
+  const ro = need(cut(render(b)), 'footer');
+  assert.ok(ro.includes('<p class="lab">Read-only: changes are switched off.</p>'));
+  assert.match(ro, /<div class="ft-t">/);
 });

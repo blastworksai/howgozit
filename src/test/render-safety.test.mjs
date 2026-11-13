@@ -4,7 +4,8 @@
 // Markup these tests require (and nothing more):
 //  - every section's outer element has data-section="<name>" (double quotes)
 //  - links are written as href="..." with double quotes, and no other quoting style is used for href
-//  - the page holds one <script src="/static/board.js"></script> with nothing between the tags
+//  - a board page holds one <script src="/static/board.js"></script> with nothing between the tags;
+//    a notice page holds no script (R172) and one nonce <style> block
 //  - the page holds one <style nonce="testnonce"> element
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,6 +22,7 @@ const loadJson = (rel) => JSON.parse(readFileSync(here(rel), 'utf8'));
 
 const FULL = loadJson('../fixtures/board/page.board.json');
 const THEME = resolveTheme(null).theme;
+const GOOGLE = resolveTheme({ fonts: { source: 'google' } }).theme;
 const OPTS = { styleNonce: 'testnonce', formToken: (action, target) => 'tok-' + action + '-' + target };
 const render = (b, theme = THEME) => renderPage(b, theme, OPTS);
 const count = (s, re) => (s.match(re) || []).length;
@@ -113,18 +115,30 @@ test('R74 a good GitHub address on a seat does get an href', () => {
   assert.ok(hrefs(need(cut(html), 'next')).some((h) => h === 'https://github.com/sam-life/life/issues/4'));
 });
 
-test('R74 every href of the full page is GitHub, the stylesheet or the font stylesheet', () => {
+test('R74 every href of the full page is GitHub or the stylesheet, and with the default theme (system fonts, R84) no font stylesheet', () => {
   const html = render(FULL);
   const all = hrefs(html);
   assert.equal(hrefAttrCount(html), all.length, 'every href is double-quoted');
   assert.ok(all.length > 0);
   for (const h of all) {
-    const ok = h.startsWith('https://github.com/') || h === '/static/board.css' || h.startsWith('https://fonts.googleapis.com/css2?');
+    const ok = h.startsWith('https://github.com/') || h === '/static/board.css';
     assert.ok(ok, 'unexpected href ' + h);
   }
   assert.ok(all.some((h) => h.startsWith('https://github.com/')), 'a GitHub link is present');
   assert.ok(all.includes('/static/board.css'), 'the stylesheet link is present');
-  assert.ok(all.some((h) => h.startsWith('https://fonts.googleapis.com/css2?')), 'the font link is present');
+  assert.ok(!all.some((h) => h.includes('fonts.googleapis.com')), 'no font link with the default theme');
+});
+
+test('R74 with google fonts the page links GitHub, its stylesheet and the one font stylesheet, and nothing else', () => {
+  const html = render(FULL, GOOGLE);
+  const all = hrefs(html);
+  assert.equal(hrefAttrCount(html), all.length, 'every href is double-quoted');
+  for (const h of all) {
+    const ok = h.startsWith('https://github.com/') || h === '/static/board.css' || h.startsWith('https://fonts.googleapis.com/css2?');
+    assert.ok(ok, 'unexpected href ' + h);
+  }
+  assert.equal(all.filter((h) => h.startsWith('https://fonts.googleapis.com/css2?')).length, 1, 'one font link');
+  assert.ok(!all.includes('/skin/skin.css'), 'no skin link without a skin (R171)');
 });
 
 function stateBoard() {
@@ -204,8 +218,44 @@ test('R84 fonts.source system leaves no outside font address in the page', () =>
 });
 
 test('R84 fonts.source google links the font stylesheet', () => {
+  const html = render(FULL, GOOGLE);
+  assert.equal(count(html, /https:\/\/fonts\.googleapis\.com\/css2/g), 1);
+});
+
+const STACK_SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const STACK_MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+const rootRule = (html) => html.match(/<style\b[^>]*>\s*:root\{([^}]*)\}/)?.[1] ?? '';
+
+test('R84 given no theme file the page makes no outside request and the three font variables are the system stacks', () => {
   const html = render(FULL, THEME);
-  assert.ok(count(html, /https:\/\/fonts\.googleapis\.com\/css2/g) >= 1);
+  const urls = html.match(/https:\/\/[^\s"'<>]*/g) || [];
+  for (const u of urls) assert.ok(u.startsWith('https://github.com/'), 'outside address ' + u);
+  assert.equal(count(html, /fonts\.googleapis|fonts\.gstatic/g), 0);
+  const root = rootRule(html);
+  assert.ok(root.includes('--font-heading:' + STACK_SANS + ';'), 'heading stack');
+  assert.ok(root.includes('--font-body:' + STACK_SANS + ';'), 'body stack');
+  assert.ok(root.includes('--font-mono:' + STACK_MONO + ';'), 'mono stack');
+});
+
+test('R84 given google fonts each variable is the family in double quotes, a comma and that role\'s system stack', () => {
+  const root = rootRule(render(FULL, GOOGLE));
+  assert.ok(root.includes('--font-heading:"Bricolage Grotesque", ' + STACK_SANS + ';'), 'heading');
+  assert.ok(root.includes('--font-body:"Geist", ' + STACK_SANS + ';'), 'body');
+  assert.ok(root.includes('--font-mono:"Geist Mono", ' + STACK_MONO + ';'), 'mono');
+});
+
+test('R82 given no theme file the page holds the thirteen default colours and --radius:20px', () => {
+  const root = rootRule(render(FULL, THEME));
+  const WANT = {
+    ground: '#131415', dot: '#2C2E30', card: '#1F2123', border: '#38393C', ink: '#ECEDED', muted: '#A9ACAF', faint: '#93979A',
+    'agent-bg': '#2C3A3C', 'agent-ink': '#EAF2F2', accent: '#4FD1B5', hot: '#EF6A52', 'hot-ink': '#FF9C88', ok: '#5FCB8A',
+  };
+  for (const [k, v] of Object.entries(WANT)) {
+    const m = root.match(new RegExp('--' + k + ':([^;]*);'));
+    assert.ok(m, '--' + k + ' is in the page');
+    assert.equal(m[1].toLowerCase(), v.toLowerCase(), '--' + k);
+  }
+  assert.ok(root.includes('--radius:20px;'));
 });
 
 function walk(dir) {
@@ -229,8 +279,9 @@ test('R83 no colour is written in the stylesheet or the render folder', () => {
   assert.ok(mjs.length >= 4, 'at least four .mjs files in board/render, found ' + mjs.length);
   const files = [cssPath, ...mjs];
   for (const f of files) {
-    const text = readFileSync(f, 'utf8');
-    assert.equal(count(text, /#[0-9a-fA-F]{3,8}\b/g), 0, 'hex colour in ' + f);
+    // R83: a numeric character reference is not a colour; remove every one (the &#8288; of R177) before the check.
+    const text = readFileSync(f, 'utf8').replace(/&#(?:[0-9]+|[xX][0-9a-fA-F]+);/g, '');
+    assert.equal(count(text, /#[0-9a-fA-F]{3,8}/g), 0, 'hex colour in ' + f);
     assert.equal(count(text, /\b(?:rgb|rgba|hsl|hsla)\(/gi), 0, 'colour function in ' + f);
   }
 });
@@ -262,10 +313,51 @@ test('R95 the static script has no eval, Function(, document.write, innerHTML or
 
 test('U renderNotice returns a small escaped page with no board section', () => {
   const P = '"><script>alert(1)</script>&\'';
-  const html = renderNotice({ title: 'Plain title ' + P, message: 'Plain message ' + P, status: 503 });
+  const html = renderNotice({ title: 'Plain title ' + P, message: 'Plain message ' + P, status: 503 }, NOTICE_OPTS);
   assert.equal(typeof html, 'string');
   assert.ok(html.includes('Plain title') && html.includes('Plain message'));
   assert.ok(count(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/g) >= 2, 'payload escaped in title and message');
   assert.equal(count(html, /<script>alert\(1\)/gi), 0);
   assert.equal(count(html, /data-section/g), 0);
+});
+
+const NOTICE_OPTS = { styleNonce: 'noticenonce' };
+const noticePage = (status = 404) => renderNotice({ title: 'No settings file found', message: 'Add one.', status }, NOTICE_OPTS);
+
+test('R77 a notice page carries no script, no style attribute, no event attribute and one nonce style block', () => {
+  const html = noticePage();
+  assert.equal(count(html, /<script\b/gi), 0, 'a notice page has no script (R172)');
+  assert.equal(count(html, /style="/g), 0);
+  for (const tag of tagsOf(html)) {
+    assert.ok(!/\sstyle\s*=/i.test(tag), 'style attribute in ' + tag);
+    assert.ok(!/\son[a-z]+\s*=/i.test(tag), 'event attribute in ' + tag);
+  }
+  assert.equal(count(html, /<style\b/gi), 1, 'exactly one <style');
+  assert.match(html.match(/<style\b[^>]*>/i)[0], /\snonce="noticenonce"/);
+});
+
+test('R172 a notice page has the head: charset, viewport, title, board stylesheet, then the one nonce style block with the default variables only', () => {
+  const html = noticePage();
+  assert.ok(html.includes('<html lang="en">'));
+  assert.ok(!html.includes('data-skin') && !html.includes('/skin/'), 'no skin without a skin');
+  const at = (s) => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
+  const order = [at('<meta charset="utf-8">'), at('<meta name="viewport"'), at('<title>No settings file found</title>'), at('<link rel="stylesheet" href="/static/board.css">'), at('<style nonce="noticenonce">')];
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'head order');
+  assert.deepEqual(hrefs(html), ['/static/board.css']);
+  const style = html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i)[1].trim();
+  assert.match(style, /^:root\{[^{}]*\}$/, 'one :root rule and nothing else');
+  const names = [...style.matchAll(/(--[a-z-]+):/g)].map((m) => m[1]).sort();
+  assert.deepEqual(names, ['--accent', '--agent-bg', '--agent-ink', '--border', '--card', '--dot', '--faint', '--font-body', '--font-heading', '--font-mono', '--ground', '--hot', '--hot-ink', '--ink', '--muted', '--ok', '--on-accent', '--radius']);
+  assert.match(style, /--ground:#131415;/i, 'default ground');
+  assert.ok(style.includes('--font-body:' + STACK_SANS + ';'), 'system stacks, so no font host');
+  assert.equal(count(html, /fonts\.googleapis|fonts\.gstatic/g), 0);
+});
+
+test('R172 a notice page is the emp block: four fixings, a lab line with a pad by status, a cap headline, the message', () => {
+  const warn = noticePage(404);
+  assert.ok(warn.includes('<main class="notice"><div class="emp emp--block"><span class="fix fix--tl"></span><span class="fix fix--tr"></span><span class="fix fix--bl"></span><span class="fix fix--br"></span>'));
+  assert.ok(warn.includes('<p class="lab"><span class="pad warn"></span></p><h1 class="bk-h cap">No settings file found</h1><p>Add one.</p></div></main>'));
+  assert.ok(noticePage(503).includes('<p class="lab"><span class="pad err"></span></p>'), 'status 500 and above gets the err pad');
+  assert.ok(noticePage(500).includes('<span class="pad err">'));
+  assert.ok(noticePage(499).includes('<span class="pad warn">'));
 });

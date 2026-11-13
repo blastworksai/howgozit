@@ -128,7 +128,7 @@ function assertPlainSentence(err) {
 function assertLockedHeaders(res, label) {
   assert.match(res.headers['content-security-policy'] || '', /default-src 'none'/, `${label} csp`);
   assert.equal(res.headers['x-content-type-options'], 'nosniff', `${label} nosniff`);
-  assert.equal(res.headers['referrer-policy'], 'no-referrer', `${label} referrer`);
+  assert.equal(res.headers['referrer-policy'], 'same-origin', `${label} referrer`);
   assert.equal(res.headers['cache-control'], 'no-store', `${label} cache`);
 }
 
@@ -326,6 +326,44 @@ test('R77 the real page has no inline style or handler, one external script and 
     assert.ok(styleNonce, 'style block has a nonce');
     assert.equal(styleNonce[1], cspNonce[1]);
     assert.ok(!html.includes(TOKEN));
+  });
+});
+
+const SYSTEM_POLICY = (n) =>
+  `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${n}'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`;
+const PLAIN_POLICY =
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+
+test('R77 the real default page carries policy 3 exactly and links no font stylesheet', async () => {
+  await withServer({ fetch: makeWorldFetch() }, async ({ port }) => {
+    const res = await sendRequest(port, { reqPath: '/' });
+    assert.equal(res.status, 200);
+    const n = res.headers['content-security-policy'].match(/'nonce-([^']+)'/);
+    assert.ok(n, 'csp has a nonce');
+    assert.equal(res.headers['content-security-policy'], SYSTEM_POLICY(n[1]));
+    assert.ok(!res.body.includes('fonts.googleapis.com'), 'no font link');
+  });
+});
+
+test('R77 a static file and the health check carry the plain policy: no nonce, no font-src, no font host', async () => {
+  await withServer({}, async ({ port }) => {
+    for (const p of ['/static/board.css', '/static/board.js', '/healthz']) {
+      const res = await sendRequest(port, { reqPath: p });
+      assert.equal(res.headers['content-security-policy'], PLAIN_POLICY, p);
+    }
+  });
+});
+
+test('R77 the real notice page has the policy nonce on one style block and no script', async () => {
+  await withServer({}, async ({ port }) => {
+    const res = await sendRequest(port, { reqPath: '/' });
+    assert.equal(res.status, 503);
+    const n = res.headers['content-security-policy'].match(/'nonce-([^']+)'/);
+    assert.ok(n, 'the notice policy has a nonce');
+    assert.equal(res.headers['content-security-policy'], SYSTEM_POLICY(n[1]));
+    assert.equal((res.body.match(/<style\b[^>]*>/g) || []).length, 1);
+    assert.ok(res.body.includes(`<style nonce="${n[1]}">`));
+    assert.equal((res.body.match(/<script/g) || []).length, 0);
   });
 });
 

@@ -28,6 +28,8 @@ services:
       # They must come from a secret store or the env_file below, never be written into this file.
       # BOARD_ICLOUD_USER:
       # BOARD_ICLOUD_APP_PASSWORD:
+      # Optional skin (references/skins.md). Needs the read-only mount under "volumes" below.
+      # BOARD_SKIN_DIR: /skin
       # BOARD_PROXY_SECRET is optional and also a secret. Put it in the env_file below, and give the
       # same file to the caddy service, so both sides read one value. references/deploy-proxy.md,
       # section "On a machine other people or programs share", explains it.
@@ -41,6 +43,8 @@ services:
 
     volumes:
       - board-data:/data
+      # Optional skin, mounted read-only. The folder must be readable by the board's user (references/skins.md).
+      # - /etc/board/skin:/skin:ro
 
     # A small init process in front, so the board stops at once on "docker compose stop".
     init: true

@@ -14,7 +14,7 @@ const FONT_FILES = 'https://fonts.gstatic.com';
 const TITLES = { 400: 'That did not work', 403: 'Not allowed', 502: 'GitHub did not answer', 503: 'The board is not available' };
 const FAILED = 'Something went wrong on the board. Nothing was changed that you can see; try again in a minute.';
 
-export function securityHeaders({ nonce = null, fontHosts = false } = {}) {
+export function securityHeaders({ nonce = null, fontHosts = false, skinFonts = false } = {}) {
   const style = ["'self'"];
   if (nonce) style.push(`'nonce-${nonce}'`);
   if (fontHosts) style.push(FONT_STYLE);
@@ -23,27 +23,18 @@ export function securityHeaders({ nonce = null, fontHosts = false } = {}) {
     "script-src 'self'",
     `style-src ${style.join(' ')}`,
   ];
-  if (fontHosts) parts.push(`font-src ${FONT_FILES}`);
+  // R77: font-src 'self' only with a skin font; the two policies with Google fonts keep the Google host after it.
+  if (skinFonts || fontHosts) parts.push(`font-src ${[skinFonts ? "'self'" : '', fontHosts ? FONT_FILES : ''].filter(Boolean).join(' ')}`);
   parts.push("img-src 'self' data:", "connect-src 'self'", "form-action 'self'", "base-uri 'none'", "frame-ancestors 'none'");
   const csp = parts.join('; ');
   return {
     'content-security-policy': csp,
     'x-content-type-options': 'nosniff',
-    'referrer-policy': 'no-referrer',
+    'referrer-policy': 'same-origin',
     'cache-control': 'no-store',
   };
 }
 
-function noticeAnswer(title, message, status) {
-  return {
-    status,
-    headers: { ...securityHeaders(), 'content-type': HTML },
-    body: renderNotice({ title, message, status }),
-  };
-}
-
-const fromLoader = (n) => noticeAnswer(n.title, n.message, n.status || 503);
-const refusal = (status, message) => noticeAnswer(TITLES[status] || TITLES[400], message, status);
 const redirect = () => ({ status: 303, headers: { ...securityHeaders(), location: '/' }, body: '' });
 const str = (v) => (typeof v === 'string' ? v : '');
 
@@ -78,8 +69,25 @@ function readForm(name, form, dataRepo) {
 
 const RUN = { idea: logIdea, habit: setHabit, sort: sortIdea, close: closeTask, score: setScore };
 
-export function createHandlers({ loader, gh, guard, env, clock, random = () => randomBytes(16).toString('base64url'), verbsFor }) {
+export function createHandlers({ loader, gh, guard, env, clock, random = () => randomBytes(16).toString('base64url'), verbsFor, skin }) {
   const notion = env.backend === 'notion';
+  // R165: a skin counts only when it loaded; the handlers see its flags and warnings, never its bodies.
+  const skinOn = !!(skin && skin.loaded === true);
+  const skinFonts = skinOn && skin.hasFonts === true;
+  const skinWarnings = skin && Array.isArray(skin.warnings) ? skin.warnings.filter((w) => w && typeof w.code === 'string' && Number.isInteger(w.count) && w.count > 0).map((w) => ({ code: w.code, count: w.count })) : [];
+
+  // A notice page does not read the theme, so it counts as system fonts (R77): its own nonce, policy 3, no script.
+  function noticeAnswer(title, message, status) {
+    const nonce = random();
+    return {
+      status,
+      headers: { ...securityHeaders({ nonce, skinFonts }), 'content-type': HTML },
+      body: renderNotice({ title, message, status }, skinOn ? { styleNonce: nonce, skin: true } : { styleNonce: nonce }),
+    };
+  }
+  const fromLoader = (n) => noticeAnswer(n.title, n.message, n.status || 503);
+  const refusal = (status, message) => noticeAnswer(TITLES[status] || TITLES[400], message, status);
+
   const owner = String(env.repo || '').split('/')[0];
 
   // The low-level gh, shaped for the actions, telling the loader about each write (R70).
@@ -168,12 +176,14 @@ export function createHandlers({ loader, gh, guard, env, clock, random = () => r
     if (!loaded.ok) return fromLoader(loaded.notice);
     const bundle = loaded.bundle;
     const nonce = random();
-    const board = buildBoard({ ...bundle, now: new Date(clock.now()).toISOString() });
-    const body = renderPage(board, bundle.theme, { styleNonce: nonce, formToken: guard.formToken });
+    // R168: the skin's warnings join the board's own, merged by code in buildBoard; a skin without any leaves the bundle as it is.
+    const input = skinWarnings.length ? { ...bundle, run: { ...(bundle.run || {}), warnings: [...((bundle.run && bundle.run.warnings) || []), ...skinWarnings] } } : bundle;
+    const board = buildBoard({ ...input, now: new Date(clock.now()).toISOString() });
+    const body = renderPage(board, bundle.theme, skinOn ? { styleNonce: nonce, formToken: guard.formToken, skin: true } : { styleNonce: nonce, formToken: guard.formToken });
     return {
       status: 200,
       headers: {
-        ...securityHeaders({ nonce, fontHosts: themeCss(bundle.theme).fontHosts === true }),
+        ...securityHeaders({ nonce, fontHosts: themeCss(bundle.theme).fontHosts === true, skinFonts }),
         'content-type': HTML,
       },
       body,

@@ -158,6 +158,9 @@ function footerItems(html) {
   const m = html.match(/<ul class="warnings">([\s\S]*?)<\/ul>/);
   return m ? [...m[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map((x) => unesc(x[1])) : [];
 }
+// A broken card carries the class panel-error as one token among others (PART-MAP C6), on whatever element.
+const hasPanelError = (s) => /class="[^"]*\bpanel-error\b[^"]*"/.test(s);
+
 function calendarSection(html) {
   const marks = [...html.matchAll(/data-section="([^"]+)"/g)].map((m) => ({ name: m[1], start: html.lastIndexOf('<', m.index) }));
   const i = marks.findIndex((m) => m.name === 'calendar');
@@ -178,7 +181,7 @@ function pageEvents(html) {
 function pageAllDay(html) {
   const m = calendarSection(html).match(ALLDAY_EL);
   assert.ok(m, 'no data-allday element');
-  const inner = m[2].replace(/<span class="cal-allday-label">[^<]*<\/span>/, '');
+  const inner = m[2].replace(/<span class="cal-allday-label(?: [^"]*)?">[^<]*<\/span>/, '');
   return inner.split(' · ').map((seg) => {
     const word = [...seg.matchAll(SOURCE_EL)].map((x) => unesc(x[1]));
     assert.equal(word.length, 1, 'each all-day title needs one data-source element: ' + seg);
@@ -186,7 +189,7 @@ function pageAllDay(html) {
   });
 }
 const head = (html) => {
-  const m = calendarSection(html).match(/card__note">(\d+) events?</);
+  const m = calendarSection(html).match(/card__note(?: [^"]*)?">(\d+) events?</);
   assert.ok(m, 'no event count in the head of the calendar card');
   return Number(m[1]);
 };
@@ -524,7 +527,7 @@ test('R127 [R113] good Google and an unreadable file (not JSON, wrong shape): Go
     assert.equal(v.calSource.state, 'stale', why);
     assert.deepEqual(v.calWarnings, [{ code: 'calendar-file-unreadable', count: 1 }], why);
     assert.equal(footerItems(v.html).filter((i) => i === FILE_UNREADABLE_TEXT).length, 1, why);
-    assert.equal(calendarSection(v.html).includes('class="panel-error"'), false, why);
+    assert.equal(hasPanelError(calendarSection(v.html)), false, why);
   }
 });
 
@@ -535,7 +538,7 @@ test('R127 [R113] failing Google (404) and a good file: the file\'s events, stal
   assert.equal(v.calSource.state, 'stale');
   assert.deepEqual(v.calWarnings, [{ code: SIX[2], count: 1, names: ['Home'] }]);
   assert.equal(v.html.includes(FILE_UNREADABLE_TEXT), false);
-  assert.equal(calendarSection(v.html).includes('class="panel-error"'), false);
+  assert.equal(hasPanelError(calendarSection(v.html)), false);
 });
 
 test('R127 [R113] Google failing after a good read earlier today, and a good file: the kept Google events and the file\'s, stale, unreachable once', async () => {

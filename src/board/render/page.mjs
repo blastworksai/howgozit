@@ -1,7 +1,7 @@
 // The page frame: head, nonce style block, header, capture, footer, and the order of the sections (R86).
 // Pure: no clock, no file, no network, no environment. Every outside string is escaped where it is written (R73).
 import { esc, githubHref, notionHref } from '../html.mjs';
-import { themeCss, mailboxVars } from '../theme.mjs';
+import { themeCss, mailboxVars, resolveTheme } from '../theme.mjs';
 import { brief, season, focus, timeline } from './top.mjs';
 import { calendar, inbox, next, habits } from './mid.mjs';
 import { heatmap, projects, log, ideas, standalone } from './low.mjs';
@@ -77,6 +77,8 @@ const WARNINGS = {
   'calendar-unreachable': () => 'iCloud did not answer, so the calendar may be out of date.',
   'calendar-not-found': (n) => (n === 1 ? '1 calendar named in the settings was not found in iCloud.' : `${n} calendars named in the settings were not found in iCloud.`),
   'calendar-event-skipped': (n) => (n === 1 ? '1 calendar event could not be read and is not shown.' : `${n} calendar events could not be read and are not shown.`),
+  'skin-file-skipped': (n) => (n === 1 ? '1 skin file could not be used and was skipped.' : `${n} skin files could not be used and were skipped.`),
+  'skin-unreadable': () => 'The skin folder could not be read, so the board is shown without a skin.',
   'calendar-zone-unknown': (n) => (n === 1 ? '1 calendar event names a time zone this board does not know, so its time may be off.' : `${n} calendar events name a time zone this board does not know, so their times may be off.`),
 };
 
@@ -110,9 +112,10 @@ export function warningText(w) {
   return f ? f(n) : `Something unexpected was noticed ${n} time${n === 1 ? '' : 's'} while reading the data.`;
 }
 
+const SKIN_LINK = '<link rel="stylesheet" href="/skin/skin.css">\n';
 const SOURCE_NAMES = { github: 'GitHub', notion: 'Notion', calendar: 'Calendar', inbox: 'Email' };
 
-export function renderPage(board, theme, { styleNonce, formToken } = {}) {
+export function renderPage(board, theme, { styleNonce, formToken, skin } = {}) {
   const b = isObj(board) ? board : {};
   const meta = isObj(b.meta) ? b.meta : {};
   const readOnly = meta.readOnly === true;
@@ -140,9 +143,14 @@ export function renderPage(board, theme, { styleNonce, formToken } = {}) {
 
   const hidden = (name, value) => `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
 
-  const form = (action, target, fields = {}, label = '', extra = '') => {
+  const KEYS = new Set(['pri', 'sm', 'close']);
+  // C1: the key. `opts.kind` is 'pri' | 'sm' | 'close'; absent, it follows the action (idea pri, close close, rest sm).
+  // Accept (a sort form with an accept field) is the small primary key; the done habit key is pressed.
+  const form = (action, target, fields = {}, label = '', extra = '', opts = {}) => {
     if (readOnly) return '';
+    const o = isObj(opts) ? opts : {};
     const t = String(target);
+    const own = isObj(fields) ? Object.entries(fields) : [];
     let derived = '';
     if (action === 'habit') {
       const [id = '', date = '', mode = ''] = t.split(':');
@@ -150,19 +158,46 @@ export function renderPage(board, theme, { styleNonce, formToken } = {}) {
     } else if (action === 'sort' || action === 'close') {
       derived = hidden('number', t);
     }
-    const own = isObj(fields) ? Object.entries(fields).map(([k, v]) => hidden(k, v)).join('') : '';
-    return `<form method="post" action="/actions/${esc(action)}">${hidden('token', formToken(action, t))}${derived}${own}${extra}<button type="submit">${esc(label)}</button></form>`;
+    const ownHidden = own.map(([k, v]) => hidden(k, v)).join('');
+    const head = `<form method="post" action="/actions/${esc(action)}">${hidden('token', formToken(action, t))}${derived}${ownHidden}${extra}`;
+    const accept = action === 'sort' && own.some(([k]) => k === 'accept');
+    const kind = KEYS.has(o.kind) ? o.kind : action === 'idea' || accept ? 'pri' : action === 'close' ? 'close' : 'sm';
+    if (kind === 'close') {
+      return `${head}<button type="submit" class="ck"><span class="box" aria-hidden="true"><svg viewBox="0 0 30 30"><polyline points="8,15 13,20 22,10"/></svg></span><span class="sr-only">${esc(label)}</span></button></form>`;
+    }
+    const small = o.small === true || (o.small === undefined && accept);
+    const klass = kind === 'pri' ? (small ? 'b sm pri' : 'b pri') : 'b sm';
+    const pressed = o.pressed === true || (o.pressed === undefined && action === 'habit' && t.endsWith(':off'));
+    return `${head}<button type="submit" class="${klass}"${pressed ? ' aria-pressed="true"' : ''}><span class="b-f"><span class="b-n"></span><span class="b-z" aria-hidden="true"></span>${esc(label)}</span></button></form>`;
+  };
+
+  // R178: per-item geometry classes. Like x- and w-, each registrar returns the class name and remembers the rule.
+  const usedLane = new Map();
+  const usedCalH = new Set();
+  const usedFit = new Set();
+  const posInt = (v) => Number.isInteger(v) && v >= 1 && v <= 1000;
+  const lane = (i, n) => {
+    if (!posInt(i) || !posInt(n) || i > n) return '';
+    usedLane.set(`${i}of${n}`, [i, n]);
+    return `cal-lane-${i}of${n}`;
+  };
+  const calH = (n) => {
+    if (!posInt(n)) return '';
+    usedCalH.add(n);
+    return `cal-h-${n}`;
   };
 
   const ui = {
     esc,
     href,
     tag: backend === 'notion' ? 'NT' : 'GH',
-    src: (tag) => `<span class="src" data-src="${esc(tag)}">${esc(tag)}</span>`,
+    src: (tag) => `<span class="tag src" data-src="${esc(tag)}">${esc(tag)}</span>`,
     form,
     pc: (key) => (typeof key === 'string' && KEY_RE.test(key) && projectByKey.has(key) ? 'pc-' + key : ''),
     x: (pct) => cls(usedX, 'x', pct),
     w: (pct) => cls(usedW, 'w', pct),
+    lane,
+    calH,
     readOnly,
   };
 
@@ -178,7 +213,7 @@ export function renderPage(board, theme, { styleNonce, formToken } = {}) {
 
   const withBreak = (s) => (s === '' ? '' : s + '\n');
   const body = [
-    renderHeader(b, meta, tz),
+    renderHeader(b, meta, tz, usedFit),
     readOnly ? '' : renderCapture(ui),
     row('brief', [brief, season]),
     row('focus', [focus, timeline]),
@@ -203,24 +238,35 @@ export function renderPage(board, theme, { styleNonce, formToken } = {}) {
   }
   for (const v of [...usedX].sort((a, c) => a - c)) rules.push(`.x-${String(v).replace('.', '_')}{--x:${v}%}`);
   for (const v of [...usedW].sort((a, c) => a - c)) rules.push(`.w-${String(v).replace('.', '_')}{--w:${v}%}`);
+  // R178: one rule per lane (i, n) used, in lane order within a cluster size; lane widths are exactly 100% / n.
+  const dec = (n) => String(Number(n.toFixed(3)));
+  for (const [i, n] of [...usedLane.values()].sort((a, c) => a[1] - c[1] || a[0] - c[0])) {
+    rules.push(`.cal-event.cal-lane-${i}of${n}{left:${i === 1 ? '0' : dec(((i - 1) * 100) / n) + '%'};width:${dec(100 / n)}%}`);
+  }
+  for (const n of [...usedCalH].sort((a, c) => a - c)) rules.push(`.cal-h-${n}{height:calc(var(--cal-hour) * ${n})}`);
+  // R177: a long name shrinks on the phone only; the at-rule lives in the nonce block (part map J2).
+  for (const lw of [...usedFit].sort((a, c) => a - c)) {
+    rules.push(`@media (max-width:480px){.header__title.fit-${lw}{font-size:max(18px,min(40px,calc((100vw - 32px) / ${(lw * 0.66).toFixed(2)})))}}`);
+  }
 
   const name = typeof meta.name === 'string' && meta.name !== '' ? meta.name : '';
   const title = name ? `${name} · Howgozit` : 'Howgozit';
   const fontLink = css.fontHref ? `<link rel="stylesheet" href="${esc(css.fontHref)}">\n` : '';
 
-  return '<!doctype html>\n<html lang="en">\n<head>\n'
+  return `<!doctype html>\n<html lang="en"${skin === true ? ' data-skin' : ''}>\n<head>\n`
     + '<meta charset="utf-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     + `<title>${esc(title)}</title>\n`
     + '<link rel="stylesheet" href="/static/board.css">\n'
     + fontLink
+    + (skin === true ? SKIN_LINK : '')
     + `<style nonce="${esc(styleNonce)}">\n${rules.join('\n')}\n</style>\n`
     + '</head>\n<body>\n<div class="page">\n'
     + body.join('')
     + '</div>\n<script src="/static/board.js"></script>\n</body>\n</html>\n';
 }
 
-function renderHeader(b, meta, tz) {
+function renderHeader(b, meta, tz, usedFit) {
   const wk = meta.weekNumber !== undefined && meta.weekNumber !== null ? ` · Week ${esc(meta.weekNumber)}` : '';
   const time = clock(meta.generatedAt, tz);
   const date = `${esc(dateLine(meta.today))}${wk}${time ? ' · ' + esc(time) : ''}`;
@@ -230,27 +276,40 @@ function renderHeader(b, meta, tz) {
     const id = String(s.id);
     const label = id === 'brief' ? agent : id === 'log' ? `${agent} log` : Object.hasOwn(SOURCE_NAMES, id) ? SOURCE_NAMES[id] : id;
     const state = s.state === 'ok' ? 'ok' : s.state === 'stale' ? 'stale' : 'error';
+    const pad = state === 'ok' ? 'ok' : state === 'stale' ? 'warn' : 'err';
     const at = s.at ? clock(s.at, tz) : '';
     const text = state === 'ok' ? (at ? `synced ${at}` : 'synced') : state === 'stale' ? 'out of date' : 'error';
-    return `<li class="chip"><span class="dot dot--${state}"></span><span class="chip__name">${esc(label)}</span><span class="chip__state">${esc(text)}</span></li>`;
+    return `<li class="chip"><span class="bdg chip__name"><span class="pad ${pad}"></span><span class="chip__label">${esc(label)}</span></span><span class="lab chip__state">${esc(text)}</span></li>`;
   }).join('');
 
   let banner = '';
   if (isObj(meta.stale)) {
-    banner = `<p class="banner" data-banner role="status"><span class="banner__title">Showing the last good read.</span> <span>${esc(String(meta.stale.reason).replace(/\.+$/, ''))}. Data from ${esc(stamp(meta.stale.since, tz))}.</span></p>`;
+    banner = `<div class="al ch in banner" data-k="warn" data-banner role="status"><span class="pad warn"></span><div class="al-t"><b class="cap banner__title">Showing the last good read.</b><span>${esc(String(meta.stale.reason).replace(/\.+$/, ''))}. Data from ${esc(stamp(meta.stale.since, tz))}.</span></div></div>\n`;
   }
 
+  // R177: a name over 14 characters with a space is one highlight plate per word; the full stop follows U+2060
+  // and sits outside the last plate, so it can never wrap alone. A longest word over 13 characters gets a fit- class.
+  const name = meta.name === undefined || meta.name === null ? '' : String(meta.name);
+  const words = name.length > 14 && name.includes(' ') ? name.split(' ').filter(Boolean) : [name];
+  // Iterative on purpose: a spread over outside-sized data exceeds the argument limit and throws.
+  let lw = 0;
+  for (const w of words) if (w.length > lw) lw = w.length;
+  const fit = lw > 13 ? ` fit-${lw}` : '';
+  if (fit) usedFit.add(lw);
+  const plates = words.map((w) => `<span class="hl">${esc(w)}</span>`).join(' ');
+
   return '<header class="header" data-section="header">\n'
-    + `<div class="header__main"><p class="header__date">${date}</p>`
-    + `<h1 class="header__title">${esc(meta.greeting)}, <span class="hl">${esc(meta.name)}</span>.</h1></div>\n`
+    + `<div class="header__main"><p class="header__date lab"><span class="pad"></span>${date}</p>`
+    + `<h1 class="header__title cap${fit}">${esc(meta.greeting)}, ${plates}&#8288;.</h1></div>\n`
     + `<ul class="sources" aria-label="Sources">${chips}</ul>\n`
     + banner
+    + '<div class="rail" aria-hidden="true"></div>\n'
     + '</header>\n';
 }
 
 function renderCapture(ui) {
   const extra = '<label class="sr-only" for="idea-title">Log an idea</label>'
-    + `<input id="idea-title" type="text" name="title" maxlength="200" required placeholder="Log an idea. It becomes a ${ui.tag === 'NT' ? 'Notion row' : 'GitHub issue'}.">`;
+    + `<span class="fx"><input id="idea-title" type="text" name="title" maxlength="200" required placeholder="Log an idea. It becomes a ${ui.tag === 'NT' ? 'Notion row' : 'GitHub issue'}."><span class="floor"></span></span>`;
   return '<section class="capture" data-section="capture">\n'
     + ui.form('idea', 'new', {}, 'Log idea', extra)
     + '\n<p data-message></p>\n</section>\n';
@@ -263,21 +322,30 @@ function renderFooter(b, meta, tz, ui, readOnly) {
   const link = ui.href(meta.repoUrl);
   const repoName = ui.tag === 'NT' ? 'Notion' : 'Data repo';
   const repo = link === null ? repoName : `<a href="${link}">${repoName}</a>`;
-  return '<footer class="footer" data-section="footer">\n'
-    + (readOnly ? '<p>Read-only: changes are switched off.</p>\n' : '')
-    + (warns.length ? `<ul class="warnings">${warns.map((w) => `<li>${esc(warningText(w))}</li>`).join('')}</ul>\n` : '')
-    + `<p class="footer__time">Data from ${esc(when)} · ${esc(tz)} · ${repo}</p>\n`
+  const top = (readOnly ? '<p class="lab">Read-only: changes are switched off.</p>' : '')
+    + (warns.length ? `<ul class="warnings">${warns.map((w) => `<li>${esc(warningText(w))}</li>`).join('')}</ul>` : '');
+  return '<footer class="ft footer" data-section="footer">\n'
+    + (top === '' ? '' : `<div class="ft-t">${top}</div>\n`)
+    + '<div class="rail" aria-hidden="true"></div>\n'
+    + `<p class="ft-b lab footer__time"><span>Data from ${esc(when)} · ${esc(tz)} · ${repo}</span></p>\n`
     + '</footer>\n';
 }
 
-export function renderNotice({ title, message, status } = {}) {
-  void status;
-  return '<!doctype html>\n<html lang="en">\n<head>\n'
+// D17 / K4 / R172: the notice page is the emp block, with the default theme's variables in one nonce style block,
+// the board stylesheet, no script and no section hook. The caller passes the nonce it put in the response header.
+export function renderNotice({ title, message, status } = {}, { styleNonce, skin } = {}) {
+  const vars = themeCss(resolveTheme(null).theme).vars;
+  const root = ':root{' + Object.entries(vars).map(([k, v]) => `${k}:${v};`).join('') + '}';
+  const pad = Number(status) >= 500 ? 'err' : 'warn';
+  return `<!doctype html>\n<html lang="en"${skin === true ? ' data-skin' : ''}>\n<head>\n`
     + '<meta charset="utf-8">\n'
     + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     + `<title>${esc(title)}</title>\n`
     + '<link rel="stylesheet" href="/static/board.css">\n'
+    + (skin === true ? SKIN_LINK : '')
+    + `<style nonce="${esc(styleNonce)}">\n${root}\n</style>\n`
     + '</head>\n<body>\n'
-    + `<main class="notice"><h1>${esc(title)}</h1><p>${esc(message)}</p></main>\n`
+    + '<main class="notice"><div class="emp emp--block"><span class="fix fix--tl"></span><span class="fix fix--tr"></span><span class="fix fix--bl"></span><span class="fix fix--br"></span>'
+    + `<p class="lab"><span class="pad ${pad}"></span></p><h1 class="bk-h cap">${esc(title)}</h1><p>${esc(message)}</p></div></main>\n`
     + '</body>\n</html>\n';
 }

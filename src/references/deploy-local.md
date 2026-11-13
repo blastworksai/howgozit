@@ -52,6 +52,7 @@ Without a token the board prints `Set BOARD_GITHUB_TOKEN to a GitHub token that 
 | `BOARD_DATA_DIR` | Folder for the last good read. | `.board-data`, in the project folder, next to the `board` folder | rarely |
 | `BOARD_READ_ONLY` | `1` switches the four actions off. | off | optional |
 | `BOARD_CONFIG_DIR` | Reads settings, theme and state from a local folder instead of the data repository (development and tests). | none | never needed |
+| `BOARD_SKIN_DIR` | A private folder with a stylesheet, fonts and images that give the board a look of its own. Read once, at start. See `references/skins.md`. | none | optional |
 | `BOARD_ICLOUD_USER` | Your Apple Account sign-in, to show your iCloud calendar. Set together with the next one, or not at all. | none | optional |
 | `BOARD_ICLOUD_APP_PASSWORD` | An app-specific password made for the board, never the account's own password. | none | optional |
 | `BOARD_GOOGLE_ICAL_1` to `BOARD_GOOGLE_ICAL_5` | The secret address of the Google calendar in the first to fifth place of the settings, to show a Google calendar instead of iCloud. Each is optional. | none | optional |

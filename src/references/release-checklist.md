@@ -30,8 +30,15 @@ Open each file in a browser, once at desktop width and once at 390 pixels wide.
 - [ ] Open `out/notice.html`. See one plain message you could act on.
 - [ ] Narrow the window to 390 pixels. See one column and the "Log an idea" box fixed at the bottom of the screen.
 - [ ] Scroll the phone width to the end. See that the bottom box never hides the last section.
-- [ ] Look at the pages with the default fonts. See the fonts load and the text reads well.
-- [ ] Run `node scripts/render-fixture.mjs --fonts system` and reopen `out/page.html`. See the same layout in system fonts, nothing shifted or cut.
+- [ ] Look at `out/page.html` again. See a dark page with cut corners on every section frame, key and tag, and no rounded corner anywhere.
+- [ ] Look at the pages with the default fonts. See the device's own fonts and text that reads well.
+- [ ] Run `node scripts/render-fixture.mjs --fonts google` and reopen `out/page.html`. See the same layout in Google's fonts, nothing shifted or cut. (This needs a connection to Google's font service.)
+- [ ] Run `node scripts/render-fixture.mjs --skin fixtures/skin` and open `out/page.html`. This writes pages that load the skin from disk. See the skin's light colours and dark text over the neutral look, with every section still in place and nothing clipped or overlapping.
+  The skin's font file is a stand-in, so the text shows in the device's own font; that is correct.
+- [ ] Open `out/page-notion.html` and `out/notice-skin.html` from the same run. See the Notion board and the notice page both wear the skin.
+- [ ] Look in `out/skin/`. See that it holds only the skin's files from this run, that is `skin.css`, `fonts/neutral.woff2`, `img/neutral.png` and `img/neutral.svg`.
+- [ ] Run `node scripts/render-fixture.mjs --skin fixtures/no-such-folder`. See one sentence, `The skin folder could not be read, so no pages were written.`, and no page rewritten.
+- [ ] Run `node scripts/render-fixture.mjs` once more, with no flag. See the pages go back to the neutral look.
 
 ## 3. The feel, in a real browser against a real board
 
@@ -45,7 +52,18 @@ Open it in a browser.
 - [ ] Block the page's script in the browser. Repeat the four actions above. See each one reload the page and still work.
 - [ ] Stop the board's access to GitHub, or use a token without write rights, and try an action. See the server's plain message beside the control, not a blank or a code.
 - [ ] Open the network panel and reload. See requests only to the board itself.
-- [ ] With the default fonts, check the panel again. See requests to the two font hosts and no others.
+- [ ] With the default fonts, check the panel again. See requests to the board only and no font host.
+- [ ] Set `fonts.source` to `google` in the theme and reload. See requests to the two font hosts and no others. Set it back to `system`.
+- [ ] Start the board with `BOARD_SKIN_DIR` set to the full path of `fixtures/skin`, as in `references/skins.md`. See no skin line in the page's footer, and see the skin's colours.
+- [ ] With the skin on, open the network panel and reload. See requests to the board only, including `/skin/skin.css`, and see the font and image answered with a cache time of one hour and the stylesheet not cached.
+- [ ] Add a skin file with a bad name, such as `Bad.png`, to a copy of the skin folder, start the board on it and look at the footer. See `1 skin file could not be used and was skipped.`
+- [ ] Start the board with `BOARD_SKIN_DIR` set to a folder that does not exist. See the board start and the footer say `The skin folder could not be read, so the board is shown without a skin.`
+- [ ] Make a hostile vector image: copy `fixtures/skin` to a new folder and write into its `img/` a file `evil.svg` that holds a `<script>`, a link to another site and a form that posts to another site, for example:
+  `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><script>document.title="RAN"</script><image href="https://example.com/x.png" width="40" height="40"/><foreignObject width="200" height="60"><form xmlns="http://www.w3.org/1999/xhtml" method="post" action="https://example.com/post"><button type="submit">Send</button></form></foreignObject></svg>`
+  Start the board on that folder and open `/skin/img/evil.svg` directly in the browser.
+  See the tab title not change to `RAN` and no request to another site in the network panel.
+  Press the Send button, if the browser shows one. See nothing happen and still no request to another site.
+- [ ] In the same folder, open `/skin/img/neutral.svg` directly, then use it as an image in `skin.css`. See it show in both places.
 - [ ] Run `node scripts/calendar-check.mjs` against a real iCloud account. See it list the calendars and count today's events for the ones you name.
 - [ ] Look at the calendar card with real events, including one repeating event and one event from another time zone. See each at the right time.
 
